@@ -1,4 +1,4 @@
-use erupt::EntryLoader;
+use erupt::{vk, EntryLoader};
 use erupt_bootstrap::{
     DebugMessenger, DeviceBuilder, InstanceBuilder, QueueFamilyRequirements, ValidationLayers,
 };
@@ -28,8 +28,15 @@ fn main() {
         unsafe { erupt::utils::surface::create_surface(&instance, &window, None) }.unwrap();
 
     let graphics_present = QueueFamilyRequirements::graphics_present();
+    let device_features = vk::PhysicalDeviceFeatures2Builder::new().features(
+        vk::PhysicalDeviceFeaturesBuilder::new()
+            .alpha_to_one(true)
+            .build(),
+    );
+
     let device_builder = DeviceBuilder::new()
         .require_queue_family(graphics_present)
+        .require_features(&device_features)
         .for_surface(surface);
     let (device, device_metadata) =
         unsafe { device_builder.build(&instance, &instance_metadata) }.unwrap();

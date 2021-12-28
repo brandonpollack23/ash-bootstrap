@@ -69,13 +69,13 @@ impl QueueFamilyRequirements {
     /// Returns the index of the first queue family that meets the requirements.
     /// Returns `Ok(None)` when no queue family meets the requirements.
     /// Returns `Err(_)` when an internal Vulkan call failed.
-    pub fn queue_family_index(
+    pub fn queue_family<'a>(
         &self,
         instance: &InstanceLoader,
         physical_device: vk::PhysicalDevice,
-        queue_family_properties: &[vk::QueueFamilyProperties],
+        queue_family_properties: &'a [vk::QueueFamilyProperties],
         surface: Option<vk::SurfaceKHR>,
-    ) -> Result<Option<u32>, vk::Result> {
+    ) -> Result<Option<(u32, &'a vk::QueueFamilyProperties)>, vk::Result> {
         for (i, queue_family_properties) in queue_family_properties.iter().enumerate() {
             let i = i as u32;
 
@@ -106,7 +106,7 @@ impl QueueFamilyRequirements {
             };
 
             if positive() && negative() && presentation()? {
-                return Ok(Some(i));
+                return Ok(Some((i, queue_family_properties)));
             }
         }
 
@@ -230,15 +230,16 @@ impl DeviceMetadata {
         requirements: QueueFamilyRequirements,
         queue_index: u32,
     ) -> Result<Option<vk::Queue>, vk::Result> {
-        let queue_family_index = requirements.queue_family_index(
+        let queue_family_index = requirements.queue_family(
             instance,
             self.physical_device,
             &self.queue_family_properties,
             self.surface,
         )?;
 
-        let device_queue = queue_family_index.map(|queue_family_index| unsafe {
-            device.get_device_queue(queue_family_index, queue_index)
+        let device_queue = queue_family_index.and_then(|(idx, _properties)| unsafe {
+            let handle = device.get_device_queue(idx, queue_index);
+            (!handle.is_null()).then(|| handle)
         });
 
         Ok(device_queue)
@@ -329,13 +330,13 @@ impl<'a> DeviceBuilder<'a> {
     /// |physical_device, queue_family_requirements, queue_family_properties| {
     ///     let mut queue_setup = HashSet::with_capacity(queue_family_requirements.len());
     ///     for queue_family_requirements in queue_family_requirements {
-    ///         match queue_family_requirements.queue_family_index(
+    ///         match queue_family_requirements.queue_family(
     ///             instance,
     ///             physical_device,
     ///             queue_family_properties,
-    ///             surface,
+    ///             self.surface,
     ///         )? {
-    ///             Some(idx) => {
+    ///             Some((idx, _properties)) => {
     ///                 queue_setup.insert(QueueSetup::simple(idx, 1));
     ///             }
     ///             None => return Ok(None),
@@ -463,13 +464,13 @@ impl<'a> DeviceBuilder<'a> {
                 |physical_device, queue_family_requirements, queue_family_properties| {
                     let mut queue_setup = HashSet::with_capacity(queue_family_requirements.len());
                     for queue_family_requirements in queue_family_requirements {
-                        match queue_family_requirements.queue_family_index(
+                        match queue_family_requirements.queue_family(
                             instance,
                             physical_device,
                             queue_family_properties,
                             self.surface,
                         )? {
-                            Some(idx) => {
+                            Some((idx, _properties)) => {
                                 queue_setup.insert(QueueSetup::simple(idx, 1));
                             }
                             None => return Ok(None),
@@ -693,7 +694,7 @@ impl<'a> DeviceBuilder<'a> {
 
                     return Ok((device, device_metadata));
                 }
-                Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT) => continue,
+                Err(vk::Result::ERROR_FEATURE_NOT_PRESENT) => continue,
                 Err(err) => return Err(err.into()),
             }
         }
