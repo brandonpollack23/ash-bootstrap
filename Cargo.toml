@@ -1,0 +1,28 @@
+[package]
+name = "erupt-bootstrap"
+version = "0.1.0"
+authors = ["Friz64 <friz64mc@protonmail.com>"]
+license = "Zlib"
+description = "vk-bootstrap for Rust"
+documentation = "https://docs.rs/erupt-bootstrap"
+repository = "https://gitlab.com/Friz64/erupt-bootstrap"
+readme = "README.md"
+keywords = ["gamedev", "graphics", "vulkan"]
+categories = ["game-development", "graphics"]
+edition = "2021"
+
+[dependencies]
+#erupt = { version = "0.21", default-features = false }
+erupt = { path = "../erupt/erupt", default-features = false }
+raw-window-handle = { version = "0.4", optional = true }
+thiserror = "1"
+
+[features]
+default = ["surface"]
+surface = ["raw-window-handle", "erupt/surface"]
+
+[dev-dependencies]
+# enables the default erupt features for examples and tests
+#erupt = "0.21"
+erupt = { path = "../erupt/erupt" }
+winit = "0.26"
