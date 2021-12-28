@@ -221,28 +221,27 @@ impl DeviceMetadata {
         self.properties.device_type
     }
 
-    /// Retrieve the queue at index `idx` of the first queue family which meets
-    /// the requirements.
+    /// Returns a queue and the index of the queue family it belongs to.
+    /// The first queue family meeting the requirements will be chosen.
+    /// `queue_index` is the index within the queue family.
     pub fn device_queue(
         &self,
         instance: &InstanceLoader,
         device: &DeviceLoader,
         requirements: QueueFamilyRequirements,
         queue_index: u32,
-    ) -> Result<Option<vk::Queue>, vk::Result> {
-        let queue_family_index = requirements.queue_family(
+    ) -> Result<Option<(vk::Queue, u32)>, vk::Result> {
+        let queue_family = requirements.queue_family(
             instance,
             self.physical_device,
             &self.queue_family_properties,
             self.surface,
         )?;
 
-        let device_queue = queue_family_index.and_then(|(idx, _properties)| unsafe {
+        Ok(queue_family.and_then(|(idx, _properties)| unsafe {
             let handle = device.get_device_queue(idx, queue_index);
-            (!handle.is_null()).then(|| handle)
-        });
-
-        Ok(device_queue)
+            (!handle.is_null()).then(|| (handle, queue_index))
+        }))
     }
 
     /// The queue setups which are in use.
