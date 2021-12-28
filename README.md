@@ -4,7 +4,7 @@ Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
 
 ## Cargo Features
 
-- `presentation` (enabled by default): Enables the use of [`raw-window-handle`].
+- `surface` (enabled by default): Enables the use of [`raw-window-handle`].
 
 ## Licensing
 

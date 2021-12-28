@@ -271,7 +271,8 @@ impl DeviceMetadata {
     }
 }
 
-/// Function used to specify custom [`QueueSetup`]s.
+/// Function used to specify custom [`QueueSetup`]s, specified by
+/// [`DeviceBuilder::custom_queue_setup`].
 pub type CustomQueueSetupFn = dyn FnMut(
     vk::PhysicalDevice,
     &[QueueFamilyRequirements],
