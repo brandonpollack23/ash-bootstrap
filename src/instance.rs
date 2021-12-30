@@ -502,7 +502,7 @@ impl<'a> InstanceBuilder<'a> {
 
         let mut instance_messenger_info;
         if let Some(messenger_info) = messenger_info {
-            instance_messenger_info = messenger_info.clone();
+            instance_messenger_info = *messenger_info;
             instance_info = instance_info.extend_from(&mut instance_messenger_info);
         }
 
@@ -536,6 +536,12 @@ impl<'a> InstanceBuilder<'a> {
         };
 
         Ok((instance, debug_utils_messenger, report))
+    }
+}
+
+impl<'a> Default for InstanceBuilder<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

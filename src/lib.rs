@@ -1,4 +1,5 @@
 //! Vulkan Bootstrapping Library
+#![allow(clippy::missing_safety_doc)]
 #![warn(missing_docs)]
 
 pub mod device;

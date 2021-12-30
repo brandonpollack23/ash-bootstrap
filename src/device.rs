@@ -155,7 +155,7 @@ impl QueueSetup {
         }
     }
 
-    fn as_vulkan<'a>(&'a self) -> vk::DeviceQueueCreateInfoBuilder<'a> {
+    fn as_vulkan(&self) -> vk::DeviceQueueCreateInfoBuilder {
         vk::DeviceQueueCreateInfoBuilder::new()
             .flags(self.flags)
             .queue_family_index(self.queue_family_index)
@@ -504,8 +504,7 @@ impl<'a> DeviceBuilder<'a> {
                 device_type_preference
                     .iter()
                     .position(|&preference| properties.device_type == preference)
-                    .map(|index| -(index as isize))
-                    .unwrap_or(isize::MIN);
+                    .unwrap_or(usize::MAX)
             });
 
             devices_properties
@@ -699,5 +698,11 @@ impl<'a> DeviceBuilder<'a> {
         }
 
         Err(DeviceCreationError::RequirementsNotMet)
+    }
+}
+
+impl<'a> Default for DeviceBuilder<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
