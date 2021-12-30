@@ -196,8 +196,8 @@ impl DeviceMetadata {
         self.device_handle
     }
 
-    /// The physical device this metadata belongs to.
-    pub fn physical_device_handle(&self) -> vk::PhysicalDevice {
+    /// The physical device this device belongs to.
+    pub fn physical_device(&self) -> vk::PhysicalDevice {
         self.physical_device
     }
 
