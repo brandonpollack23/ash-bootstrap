@@ -279,10 +279,40 @@ pub type CustomQueueSetupFn = dyn FnMut(
     &[vk::QueueFamilyProperties],
 ) -> Result<Option<HashSet<QueueSetup>>, vk::Result>;
 
+/// Suitability of a physical device.
+pub enum DeviceSuitability {
+    /// If all requirements meet this criteria, the physical device gets picked
+    /// and the search is concluded.
+    Perfect,
+    /// If any requirement meets this criteria, the physical device gets
+    /// considered but the search for a potentially perfect physical device
+    /// continues.
+    NotPreferred,
+    /// If any requirement meets this criteria, the physical device
+    /// will under no circumstances be considered.
+    Unsuitable,
+}
+
+impl From<bool> for DeviceSuitability {
+    fn from(suitable_perfect: bool) -> Self {
+        if suitable_perfect {
+            DeviceSuitability::Perfect
+        } else {
+            DeviceSuitability::Unsuitable
+        }
+    }
+}
+
+/// Function used to specify a custom additional [`DeviceSuitability`]
+/// to consider in the selection process.
+pub type AdditionalSuitabilityFn =
+    dyn FnMut(&InstanceLoader, vk::PhysicalDevice) -> DeviceSuitability;
+
 /// Allows to easily create an [`erupt::InstanceLoader`] and queues.
 pub struct DeviceBuilder<'a> {
     loader_builder: DeviceLoaderBuilder<'a>,
     queue_setup_fn: Option<Box<CustomQueueSetupFn>>,
+    additional_suitability_fn: Option<Box<AdditionalSuitabilityFn>>,
     surface: Option<vk::SurfaceKHR>,
     prioritised_device_types: SmallVec<vk::PhysicalDeviceType>,
     queue_family_requirements: SmallVec<QueueFamilyRequirements>,
@@ -307,6 +337,7 @@ impl<'a> DeviceBuilder<'a> {
         DeviceBuilder {
             loader_builder,
             queue_setup_fn: None,
+            additional_suitability_fn: None,
             surface: None,
             prioritised_device_types: SmallVec::new(),
             queue_family_requirements: SmallVec::new(),
@@ -347,6 +378,16 @@ impl<'a> DeviceBuilder<'a> {
     /// ```
     pub fn custom_queue_setup(mut self, custom_queue_setup: Box<CustomQueueSetupFn>) -> Self {
         self.queue_setup_fn = Some(custom_queue_setup);
+        self
+    }
+
+    /// Allows to specify custom criteria for a physical device.
+    /// This can for example be used to check for limits.
+    pub fn additional_suitability(
+        mut self,
+        additional_suitability: Box<AdditionalSuitabilityFn>,
+    ) -> Self {
+        self.additional_suitability_fn = Some(additional_suitability);
         self
     }
 
@@ -450,7 +491,7 @@ impl<'a> DeviceBuilder<'a> {
     /// the handle of the used physical device handle and its properties, as
     /// wells as the enabled device extensions and used queue setups.
     pub unsafe fn build(
-        self,
+        mut self,
         instance: &'a InstanceLoader,
         instance_metadata: &InstanceMetadata,
     ) -> Result<(DeviceLoader, DeviceMetadata), DeviceCreationError> {
@@ -624,6 +665,14 @@ impl<'a> DeviceBuilder<'a> {
                 queue_family_properties,
                 enabled_extensions,
             };
+
+            if let Some(additional_suitability) = self.additional_suitability_fn.as_mut() {
+                match additional_suitability(instance, physical_device) {
+                    DeviceSuitability::Perfect => (),
+                    DeviceSuitability::NotPreferred => perfect_candidate = false,
+                    DeviceSuitability::Unsuitable => continue,
+                }
+            }
 
             if perfect_candidate {
                 perfect_candidates.push(candidate);

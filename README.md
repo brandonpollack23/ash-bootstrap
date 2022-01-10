@@ -1,6 +1,6 @@
 # erupt-bootstrap
 
-Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`]. 
+Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
 
 ## Cargo Features
 
@@ -10,7 +10,7 @@ Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
 
 This project is licensed under the [zlib License].
 
-`vk-bootstrap`, the base of this project, is licensed under the [MIT license].
+`vk-bootstrap`, the inspiration of this project, is licensed under the [MIT license].
 
 [zlib License]: https://gitlab.com/Friz64/erupt-bootstrap/-/blob/main/LICENSE
 [MIT license]: https://gitlab.com/Friz64/erupt-bootstrap/-/blob/main/LICENSE-vk-bootstrap
