@@ -28,14 +28,17 @@ fn main() {
         unsafe { erupt::utils::surface::create_surface(&instance, &window, None) }.unwrap();
 
     let graphics_present = QueueFamilyRequirements::graphics_present();
+    let transfer = QueueFamilyRequirements::preferably_separate_transfer();
+
     let device_features = vk::PhysicalDeviceFeatures2Builder::new().features(
         vk::PhysicalDeviceFeaturesBuilder::new()
-            .alpha_to_one(true)
+            //.alpha_to_one(true)
             .build(),
     );
 
     let device_builder = DeviceBuilder::new()
         .require_queue_family(graphics_present)
+        .require_queue_family(transfer)
         .require_features(&device_features)
         .for_surface(surface);
     let (device, device_metadata) =
@@ -44,9 +47,14 @@ fn main() {
         .device_queue(&instance, &device, graphics_present, 0)
         .unwrap()
         .unwrap();
+    let transfer = device_metadata
+        .device_queue(&instance, &device, transfer, 0)
+        .unwrap()
+        .unwrap();
 
     dbg!(device_metadata.device_name());
     dbg!(graphics_present);
+    dbg!(transfer);
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::NewEvents(StartCause::Init) => *control_flow = ControlFlow::Poll,

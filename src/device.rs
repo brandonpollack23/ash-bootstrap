@@ -15,10 +15,17 @@ use thiserror::Error;
 /// Requirements to queue families.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct QueueFamilyRequirements {
-    /// This requirement is only met if all these queue flags are present.
+    /// A queue family will only be considered if all these flags are set.
     pub must_support: vk::QueueFlags,
-    /// This requirement is only met if all these queue flags are not present.
+    /// A queue family will be preferred over other ones
+    /// if all these flags are set.
+    pub should_support: vk::QueueFlags,
+    /// A queue family will only be considered
+    /// if none of these flags are set.
     pub must_not_support: vk::QueueFlags,
+    /// A queue family will be preferred over other ones
+    /// if none of these flags are set.
+    pub should_not_support: vk::QueueFlags,
     /// This requirement is only met if the presentation support matches with
     /// this flag. `None` corresponds to being indifferent to the support.
     /// `Some(expected)` corresponds to the requirement being met if the support
@@ -40,10 +47,25 @@ impl QueueFamilyRequirements {
             .must_support_presentation()
     }
 
-    /// Add an requirement that these queue flags must be present in the queue
-    /// family.
+    /// Tries to match the queue family that's the closest to being a pure
+    /// transfer queue.
+    pub fn preferably_separate_transfer() -> QueueFamilyRequirements {
+        QueueFamilyRequirements::empty()
+            .must_support(vk::QueueFlags::TRANSFER)
+            .should_not_support(!vk::QueueFlags::TRANSFER)
+    }
+
+    /// Add an requirement that these queue flags must be present in the
+    /// queue family.
     pub fn must_support(mut self, must_support: vk::QueueFlags) -> QueueFamilyRequirements {
         self.must_support |= must_support;
+        self
+    }
+
+    /// Add an recommendation that these queue flags should be present in the
+    /// queue family.
+    pub fn should_support(mut self, should_support: vk::QueueFlags) -> QueueFamilyRequirements {
+        self.should_support |= should_support;
         self
     }
 
@@ -51,6 +73,16 @@ impl QueueFamilyRequirements {
     /// queue family.
     pub fn must_not_support(mut self, must_not_support: vk::QueueFlags) -> QueueFamilyRequirements {
         self.must_not_support |= must_not_support;
+        self
+    }
+
+    /// Add an recommendation that these queue flags should **not** be present in the
+    /// queue family.
+    pub fn should_not_support(
+        mut self,
+        should_not_support: vk::QueueFlags,
+    ) -> QueueFamilyRequirements {
+        self.should_not_support |= should_not_support;
         self
     }
 
@@ -76,20 +108,17 @@ impl QueueFamilyRequirements {
         queue_family_properties: &'a [vk::QueueFamilyProperties],
         surface: Option<vk::SurfaceKHR>,
     ) -> Result<Option<(u32, &'a vk::QueueFamilyProperties)>, vk::Result> {
+        let mut candidates = SmallVec::new();
         for (i, queue_family_properties) in queue_family_properties.iter().enumerate() {
             let i = i as u32;
 
-            let positive = || {
-                queue_family_properties
-                    .queue_flags
-                    .contains(self.must_support)
-            };
+            let positive_required = queue_family_properties
+                .queue_flags
+                .contains(self.must_support);
 
-            let negative = || {
-                !queue_family_properties
-                    .queue_flags
-                    .intersects(self.must_not_support)
-            };
+            let negative_required = !queue_family_properties
+                .queue_flags
+                .intersects(self.must_not_support);
 
             let presentation = || {
                 Ok(match (self.presentation_support, surface) {
@@ -105,12 +134,30 @@ impl QueueFamilyRequirements {
                 })
             };
 
-            if positive() && negative() && presentation()? {
-                return Ok(Some((i, queue_family_properties)));
+            if positive_required && negative_required && presentation()? {
+                candidates.push((i, queue_family_properties));
             }
         }
 
-        Ok(None)
+        let best_candidate = candidates
+            .into_iter()
+            .max_by_key(|(_, queue_family_properties)| {
+                let positive_recommended = self
+                    .should_support
+                    .intersection(queue_family_properties.queue_flags)
+                    .bits()
+                    .count_ones();
+
+                let negative_recommended = self
+                    .should_not_support
+                    .difference(queue_family_properties.queue_flags)
+                    .bits()
+                    .count_ones();
+
+                positive_recommended + negative_recommended
+            });
+
+        Ok(best_candidate)
     }
 }
 
@@ -240,7 +287,7 @@ impl DeviceMetadata {
 
         Ok(queue_family.and_then(|(idx, _properties)| unsafe {
             let handle = device.get_device_queue(idx, queue_index);
-            (!handle.is_null()).then(|| (handle, queue_index))
+            (!handle.is_null()).then(|| (handle, idx))
         }))
     }
 
