@@ -403,7 +403,7 @@ impl<'a> DeviceBuilder<'a> {
     ///
     /// ### Default setup
     ///
-    /// ```rust
+    /// ```ignore
     /// |physical_device, queue_family_requirements, queue_family_properties| {
     ///     let mut queue_setup = HashSet::with_capacity(queue_family_requirements.len());
     ///     for queue_family_requirements in queue_family_requirements {
