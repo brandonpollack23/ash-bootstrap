@@ -1,10 +1,51 @@
 # erupt-bootstrap
 
+[![docs.rs](https://docs.rs/erupt-bootstrap/badge.svg)](https://docs.rs/erupt-bootstrap)
+[![crates.io](https://img.shields.io/crates/v/erupt-bootstrap.svg)](https://crates.io/crates/erupt-bootstrap)
+
 Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
 
 ## Cargo Features
 
 - `surface` (enabled by default): Enables the use of [`raw-window-handle`].
+
+## Example
+
+```rust
+let entry = EntryLoader::new().unwrap();
+let instance_builder = InstanceBuilder::new()
+    .validation_layers(ValidationLayers::Request)
+    .request_debug_messenger(DebugMessenger::Default)
+    .require_surface_extensions(&window)
+    .unwrap();
+let (instance, debug_messenger, instance_metadata) =
+    unsafe { instance_builder.build(&entry) }.unwrap();
+
+let surface =
+    unsafe { erupt::utils::surface::create_surface(&instance, &window, None) }.unwrap();
+
+let graphics_present = QueueFamilyRequirements::graphics_present();
+let transfer = QueueFamilyRequirements::preferably_separate_transfer();
+
+let device_features = vk::PhysicalDeviceFeatures2Builder::new()
+    .features(vk::PhysicalDeviceFeaturesBuilder::new().build());
+
+let device_builder = DeviceBuilder::new()
+    .require_queue_family(graphics_present)
+    .require_queue_family(transfer)
+    .require_features(&device_features)
+    .for_surface(surface);
+let (device, device_metadata) =
+    unsafe { device_builder.build(&instance, &instance_metadata) }.unwrap();
+let graphics_present = device_metadata
+    .device_queue(&instance, &device, graphics_present, 0)
+    .unwrap()
+    .unwrap();
+let transfer = device_metadata
+    .device_queue(&instance, &device, transfer, 0)
+    .unwrap()
+    .unwrap();
+```
 
 ## Licensing
 

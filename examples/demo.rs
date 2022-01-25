@@ -30,11 +30,8 @@ fn main() {
     let graphics_present = QueueFamilyRequirements::graphics_present();
     let transfer = QueueFamilyRequirements::preferably_separate_transfer();
 
-    let device_features = vk::PhysicalDeviceFeatures2Builder::new().features(
-        vk::PhysicalDeviceFeaturesBuilder::new()
-            //.alpha_to_one(true)
-            .build(),
-    );
+    let device_features = vk::PhysicalDeviceFeatures2Builder::new()
+        .features(vk::PhysicalDeviceFeaturesBuilder::new().build());
 
     let device_builder = DeviceBuilder::new()
         .require_queue_family(graphics_present)
