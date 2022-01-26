@@ -12,96 +12,95 @@ use std::{
 };
 use thiserror::Error;
 
-/// Requirements to queue families.
+/// Criteria for queue families.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
-pub struct QueueFamilyRequirements {
+pub struct QueueFamilyCriteria {
     /// A queue family will only be considered if all these flags are set.
     pub must_support: vk::QueueFlags,
     /// A queue family will be preferred over other ones
-    /// if all these flags are set.
+    /// if all these flags are set. The more of these flags are set,
+    /// the more likely it is for the queue family to be chosen.
     pub should_support: vk::QueueFlags,
     /// A queue family will only be considered
     /// if none of these flags are set.
     pub must_not_support: vk::QueueFlags,
     /// A queue family will be preferred over other ones
-    /// if none of these flags are set.
+    /// if none of these flags are set. The less of these flags are set,
+    /// the more likely it is for the queue family to be chosen.
     pub should_not_support: vk::QueueFlags,
-    /// This requirement is only met if the presentation support matches with
+    /// This criteria is only met if the presentation support matches with
     /// this flag. `None` corresponds to being indifferent to the support.
-    /// `Some(expected)` corresponds to the requirement being met if the support
+    /// `Some(expected)` corresponds to the criteria being met if the support
     /// matches with `expected`.
     pub presentation_support: Option<bool>,
 }
 
-impl QueueFamilyRequirements {
-    /// Queue family requirements that are always met.
-    pub fn empty() -> QueueFamilyRequirements {
-        QueueFamilyRequirements::default()
+impl QueueFamilyCriteria {
+    /// Queue family criteria that are always met.
+    pub fn none() -> QueueFamilyCriteria {
+        QueueFamilyCriteria::default()
     }
 
-    /// The requirements are only met if the queue family supports graphics and
+    /// The criteria are only met if the queue family supports graphics and
     /// presentation.
-    pub fn graphics_present() -> QueueFamilyRequirements {
-        QueueFamilyRequirements::empty()
+    pub fn graphics_present() -> QueueFamilyCriteria {
+        QueueFamilyCriteria::none()
             .must_support(vk::QueueFlags::GRAPHICS)
             .must_support_presentation()
     }
 
     /// Tries to match the queue family that's the closest to being a pure
     /// transfer queue.
-    pub fn preferably_separate_transfer() -> QueueFamilyRequirements {
-        QueueFamilyRequirements::empty()
+    pub fn preferably_separate_transfer() -> QueueFamilyCriteria {
+        QueueFamilyCriteria::none()
             .must_support(vk::QueueFlags::TRANSFER)
             .should_not_support(!vk::QueueFlags::TRANSFER)
     }
 
     /// Add an requirement that these queue flags must be present in the
     /// queue family.
-    pub fn must_support(mut self, must_support: vk::QueueFlags) -> QueueFamilyRequirements {
+    pub fn must_support(mut self, must_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.must_support |= must_support;
         self
     }
 
     /// Add an recommendation that these queue flags should be present in the
     /// queue family.
-    pub fn should_support(mut self, should_support: vk::QueueFlags) -> QueueFamilyRequirements {
+    pub fn should_support(mut self, should_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.should_support |= should_support;
         self
     }
 
     /// Add an requirement that these queue flags must **not** be present in the
     /// queue family.
-    pub fn must_not_support(mut self, must_not_support: vk::QueueFlags) -> QueueFamilyRequirements {
+    pub fn must_not_support(mut self, must_not_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.must_not_support |= must_not_support;
         self
     }
 
     /// Add an recommendation that these queue flags should **not** be present in the
     /// queue family.
-    pub fn should_not_support(
-        mut self,
-        should_not_support: vk::QueueFlags,
-    ) -> QueueFamilyRequirements {
+    pub fn should_not_support(mut self, should_not_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.should_not_support |= should_not_support;
         self
     }
 
     /// Require that the queue family must support presentation.
-    pub fn must_support_presentation(mut self) -> QueueFamilyRequirements {
+    pub fn must_support_presentation(mut self) -> QueueFamilyCriteria {
         self.presentation_support = Some(true);
         self
     }
 
     /// Require that the queue family must not support presentation.
-    pub fn must_not_support_presentation(mut self) -> QueueFamilyRequirements {
+    pub fn must_not_support_presentation(mut self) -> QueueFamilyCriteria {
         self.presentation_support = Some(false);
         self
     }
 
-    /// Returns the index of the first queue family that meets the requirements.
-    /// Returns `Ok(None)` when no queue family meets the requirements.
+    /// Returns the index of the first queue family that meets the criteria.
+    /// Returns `Ok(None)` when no queue family meets the criteria.
     /// Returns `Err(_)` when an internal Vulkan call failed.
-    pub fn queue_family<'a>(
+    pub fn choose_queue_family<'a>(
         &self,
         instance: &InstanceLoader,
         physical_device: vk::PhysicalDevice,
@@ -275,10 +274,10 @@ impl DeviceMetadata {
         &self,
         instance: &InstanceLoader,
         device: &DeviceLoader,
-        requirements: QueueFamilyRequirements,
+        requirements: QueueFamilyCriteria,
         queue_index: u32,
     ) -> Result<Option<(vk::Queue, u32)>, vk::Result> {
-        let queue_family = requirements.queue_family(
+        let queue_family = requirements.choose_queue_family(
             instance,
             self.physical_device,
             &self.queue_family_properties,
@@ -322,7 +321,7 @@ impl DeviceMetadata {
 /// [`DeviceBuilder::custom_queue_setup`].
 pub type CustomQueueSetupFn = dyn FnMut(
     vk::PhysicalDevice,
-    &[QueueFamilyRequirements],
+    &[QueueFamilyCriteria],
     &[vk::QueueFamilyProperties],
 ) -> Result<Option<HashSet<QueueSetup>>, vk::Result>;
 
@@ -355,14 +354,14 @@ impl From<bool> for DeviceSuitability {
 pub type AdditionalSuitabilityFn =
     dyn FnMut(&InstanceLoader, vk::PhysicalDevice) -> DeviceSuitability;
 
-/// Allows to easily create an [`erupt::InstanceLoader`] and queues.
+/// Allows to easily create an [`erupt::DeviceLoader`] and queues.
 pub struct DeviceBuilder<'a> {
     loader_builder: DeviceLoaderBuilder<'a>,
     queue_setup_fn: Option<Box<CustomQueueSetupFn>>,
     additional_suitability_fn: Option<Box<AdditionalSuitabilityFn>>,
     surface: Option<vk::SurfaceKHR>,
     prioritised_device_types: SmallVec<vk::PhysicalDeviceType>,
-    queue_family_requirements: SmallVec<QueueFamilyRequirements>,
+    queue_family_criteria: SmallVec<QueueFamilyCriteria>,
     preferred_device_memory_size: Option<vk::DeviceSize>,
     required_device_memory_size: Option<vk::DeviceSize>,
     extensions: SmallVec<(*const c_char, bool)>,
@@ -387,7 +386,7 @@ impl<'a> DeviceBuilder<'a> {
             additional_suitability_fn: None,
             surface: None,
             prioritised_device_types: SmallVec::new(),
-            queue_family_requirements: SmallVec::new(),
+            queue_family_criteria: SmallVec::new(),
             preferred_device_memory_size: None,
             required_device_memory_size: None,
             extensions: SmallVec::new(),
@@ -404,14 +403,14 @@ impl<'a> DeviceBuilder<'a> {
     /// ### Default setup
     ///
     /// ```ignore
-    /// |physical_device, queue_family_requirements, queue_family_properties| {
-    ///     let mut queue_setup = HashSet::with_capacity(queue_family_requirements.len());
-    ///     for queue_family_requirements in queue_family_requirements {
-    ///         match queue_family_requirements.queue_family(
+    /// |physical_device, queue_family_criteria, queue_family_properties| {
+    ///     let mut queue_setup = HashSet::with_capacity(queue_family_criteria.len());
+    ///     for queue_family_criteria in queue_family_criteria {
+    ///         match queue_family_criteria.choose_queue_family(
     ///             instance,
     ///             physical_device,
     ///             queue_family_properties,
-    ///             self.surface,
+    ///             surface,
     ///         )? {
     ///             Some((idx, _properties)) => {
     ///                 queue_setup.insert(QueueSetup::simple(idx, 1));
@@ -451,13 +450,9 @@ impl<'a> DeviceBuilder<'a> {
         self
     }
 
-    /// Requires a queue family that meets the requirements to be present.
-    pub fn require_queue_family(
-        mut self,
-        queue_family_requirements: QueueFamilyRequirements,
-    ) -> Self {
-        self.queue_family_requirements
-            .push(queue_family_requirements);
+    /// The queue family chosen by the criteria will be enabled on the device.
+    pub fn queue_family(mut self, criteria: QueueFamilyCriteria) -> Self {
+        self.queue_family_criteria.push(criteria);
         self
     }
 
@@ -548,10 +543,10 @@ impl<'a> DeviceBuilder<'a> {
             // properly update documentation of the `custom_queue_setup` method
             // when changing this (formatting, used variables)
             Box::new(
-                |physical_device, queue_family_requirements, queue_family_properties| {
-                    let mut queue_setup = HashSet::with_capacity(queue_family_requirements.len());
-                    for queue_family_requirements in queue_family_requirements {
-                        match queue_family_requirements.queue_family(
+                |physical_device, queue_family_criteria, queue_family_properties| {
+                    let mut queue_setup = HashSet::with_capacity(queue_family_criteria.len());
+                    for queue_family_criteria in queue_family_criteria {
+                        match queue_family_criteria.choose_queue_family(
                             instance,
                             physical_device,
                             queue_family_properties,
@@ -658,12 +653,12 @@ impl<'a> DeviceBuilder<'a> {
                 }
             }
 
-            let queue_setup = if self.queue_family_requirements.is_empty() {
+            let queue_setup = if self.queue_family_criteria.is_empty() {
                 SmallVec::new()
             } else {
                 match queue_setup_fn(
                     physical_device,
-                    &self.queue_family_requirements,
+                    &self.queue_family_criteria,
                     &queue_family_properties,
                 )? {
                     Some(queue_setup) => queue_setup.into_iter().collect(),

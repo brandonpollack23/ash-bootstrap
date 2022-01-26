@@ -1,7 +1,13 @@
 #![allow(clippy::missing_safety_doc)]
 #![warn(missing_docs)]
 /*!
-Vulkan Bootstrapping Library
+Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
+
+- ✅ Instance creation
+- ✅ Physical Device selection
+- ✅ Device creation
+- ✅ Getting queues
+- ✅ Swapchain handling ([courtesy of Ralith](https://github.com/MaikKlein/ash/pull/506) - thanks!)
 
 ## Cargo Features
 
@@ -22,15 +28,15 @@ let (instance, debug_messenger, instance_metadata) =
 let surface =
     unsafe { erupt::utils::surface::create_surface(&instance, &window, None) }.unwrap();
 
-let graphics_present = QueueFamilyRequirements::graphics_present();
-let transfer = QueueFamilyRequirements::preferably_separate_transfer();
+let graphics_present = QueueFamilyCriteria::graphics_present();
+let transfer = QueueFamilyCriteria::preferably_separate_transfer();
 
 let device_features = vk::PhysicalDeviceFeatures2Builder::new()
     .features(vk::PhysicalDeviceFeaturesBuilder::new().build());
 
 let device_builder = DeviceBuilder::new()
-    .require_queue_family(graphics_present)
-    .require_queue_family(transfer)
+    .queue_family(graphics_present)
+    .queue_family(transfer)
     .require_features(&device_features)
     .for_surface(surface);
 let (device, device_metadata) =
@@ -59,6 +65,8 @@ This project is licensed under the [zlib License].
 
 pub mod device;
 pub mod instance;
+pub mod swapchain;
 
 pub use device::*;
 pub use instance::*;
+pub use swapchain::*;
