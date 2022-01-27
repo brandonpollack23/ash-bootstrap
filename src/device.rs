@@ -97,7 +97,7 @@ impl QueueFamilyCriteria {
         self
     }
 
-    /// Returns the index of the first queue family that meets the criteria.
+    /// Returns the index of the best suited queue family.
     /// Returns `Ok(None)` when no queue family meets the criteria.
     /// Returns `Err(_)` when an internal Vulkan call failed.
     pub fn choose_queue_family<'a>(
@@ -268,16 +268,16 @@ impl DeviceMetadata {
     }
 
     /// Returns a queue and the index of the queue family it belongs to.
-    /// The first queue family meeting the requirements will be chosen.
+    /// The best suited queue family meeting the criteria will be chosen.
     /// `queue_index` is the index within the queue family.
     pub fn device_queue(
         &self,
         instance: &InstanceLoader,
         device: &DeviceLoader,
-        requirements: QueueFamilyCriteria,
+        criteria: QueueFamilyCriteria,
         queue_index: u32,
     ) -> Result<Option<(vk::Queue, u32)>, vk::Result> {
-        let queue_family = requirements.choose_queue_family(
+        let queue_family = criteria.choose_queue_family(
             instance,
             self.physical_device,
             &self.queue_family_properties,

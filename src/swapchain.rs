@@ -8,7 +8,7 @@
 use erupt::{try_vk, utils::VulkanResult, vk, DeviceLoader, InstanceLoader, SmallVec};
 use std::{collections::VecDeque, mem};
 
-/// Manages synchronizing and rebuilding a Vulkan swapchain
+/// Manages synchronizing and rebuilding a Vulkan swapchain.
 pub struct Swapchain {
     options: SwapchainOptions,
 
@@ -77,7 +77,8 @@ impl Swapchain {
     ///
     /// # Safety
     ///
-    /// Access to images obtained from [`images`](Self::images) must be externally synchronized.
+    /// - `device` must match the `device` passed to [`Swapchain::new`].
+    /// - Access to images obtained from [`images`](Self::images) must be externally synchronized.
     pub unsafe fn destroy(&mut self, device: &DeviceLoader) {
         for frame in &self.frames {
             device.destroy_fence(frame.complete, None);
@@ -100,28 +101,28 @@ impl Swapchain {
         self.needs_rebuild = true;
     }
 
-    /// Maximum number of frames that may be concurrently rendered
+    /// Maximum number of frames that may be concurrently rendered.
     pub fn frames_in_flight(&self) -> usize {
         self.frames.len()
     }
 
-    /// Latest set of swapchain images, keyed by [`AcquiredFrame::image_index`]
+    /// Latest set of swapchain images, keyed by [`AcquiredFrame::image_index`].
     pub fn images(&self) -> &[vk::Image] {
         &self.images
     }
 
     /// Format of images in [`images`](Self::images), and the color space that will be used to
-    /// present them
+    /// present them.
     pub fn format(&self) -> vk::SurfaceFormatKHR {
         self.format
     }
 
-    /// Dimensions of images in [`images`](Self::images)
+    /// Dimensions of images in [`images`](Self::images).
     pub fn extent(&self) -> vk::Extent2D {
         self.extent
     }
 
-    /// Acquire resources to render a frame
+    /// Acquire resources to render a frame.
     ///
     /// Returns [`vk::Result::ERROR_OUT_OF_DATE_KHR`] if and only if the configured format or
     /// present modes could not be satisfied.
@@ -285,7 +286,7 @@ impl Swapchain {
         }
     }
 
-    /// Queue presentation of a previously acquired image
+    /// Queue presentation of a previously acquired image.
     ///
     /// # Safety
     ///
@@ -293,9 +294,9 @@ impl Swapchain {
     ///
     /// - `device` must match the `device` passed to [`Swapchain::new`].
     /// - `image_index` must have been obtained from an [`AcquiredFrame::image_index`] from a
-    ///   previous [`acquire`](Self::acquire) call which has not yet been passed to queue_present
+    ///   previous [`acquire`](Self::acquire) call which has not yet been passed to queue_present.
     /// - A command buffer that will signal `render_complete` after finishing access to the
-    ///   `image_index` element of [`images`](Self::images) must have been submitted
+    ///   `image_index` element of [`images`](Self::images) must have been submitted.
     pub unsafe fn queue_present(
         &mut self,
         device: &DeviceLoader,
@@ -319,7 +320,7 @@ impl Swapchain {
     }
 }
 
-/// [`Swapchain`] configuration
+/// [`Swapchain`] configuration.
 #[derive(Debug, Clone)]
 pub struct SwapchainOptions {
     frames_in_flight: usize,
@@ -404,15 +405,15 @@ struct Frame {
 /// Information necessary to render a frame, from [`Swapchain::acquire`]
 #[derive(Debug, Copy, Clone)]
 pub struct AcquiredFrame {
-    /// Index of the image to write to in [`Swapchain::images`]
+    /// Index of the image to write to in [`Swapchain::images`].
     pub image_index: usize,
     /// Index of the frame in flight, for use tracking your own per-frame resources, which may be
-    /// accessed immediately after [`Swapchain::acquire`] returns
+    /// accessed immediately after [`Swapchain::acquire`] returns.
     pub frame_index: usize,
-    /// Must be waited on before accessing the image associated with `image_index`
+    /// Must be waited on before accessing the image associated with `image_index`.
     pub ready: vk::Semaphore,
     /// Must be signaled when access to the image associated with `image_index` and any per-frame
-    /// resources associated with `frame_index` is complete
+    /// resources associated with `frame_index` is complete.
     pub complete: vk::Fence,
     /// Set whenever [`Swapchain::images`] has, and [`Swapchain::extent`] and [`Swapchain::format`]
     /// may have, changed since the last [`Swapchain::acquire`] call. Use this to invalidate derived

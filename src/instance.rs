@@ -30,7 +30,7 @@ pub enum DebugMessenger {
     /// Enables the debug messenger with a custom, user-provided callback.
     Custom {
         /// The user provided callback function. Feel free to take a look at the
-        /// [`default_debug_callback`] when implmenting your own.
+        /// [`default_debug_callback`] when implementing your own.
         callback: vk::PFN_vkDebugUtilsMessengerCallbackEXT,
         /// A user data pointer passed to the debug callback.
         user_data_pointer: *mut c_void,
@@ -522,7 +522,7 @@ impl<'a> InstanceBuilder<'a> {
                     .result()
             })
             .transpose()?;
-        let report = InstanceMetadata {
+        let instance_metadata = InstanceMetadata {
             instance_handle: instance.handle,
             api_version: app_info.api_version,
             enabled_layers: enabled_layers
@@ -535,7 +535,7 @@ impl<'a> InstanceBuilder<'a> {
                 .collect(),
         };
 
-        Ok((instance, debug_utils_messenger, report))
+        Ok((instance, debug_utils_messenger, instance_metadata))
     }
 }
 

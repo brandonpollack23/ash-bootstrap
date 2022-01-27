@@ -53,6 +53,8 @@ let transfer = device_metadata
     .unwrap();
 ```
 
+For more examples, visit the [git repo](https://gitlab.com/Friz64/erupt-bootstrap).
+
 ## Licensing
 
 This project is licensed under the [zlib License].
