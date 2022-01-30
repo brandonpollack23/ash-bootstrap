@@ -1,6 +1,6 @@
 [package]
 name = "erupt-bootstrap"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Friz64 <friz64mc@protonmail.com>"]
 license = "Zlib"
 description = "vk-bootstrap for Rust"
