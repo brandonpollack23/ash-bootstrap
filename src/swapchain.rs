@@ -314,9 +314,10 @@ impl Swapchain {
 
         if let vk::Result::SUBOPTIMAL_KHR | vk::Result::ERROR_OUT_OF_DATE_KHR = queue_present.raw {
             self.needs_rebuild = true;
+            VulkanResult::new_ok(())
+        } else {
+            queue_present
         }
-
-        queue_present
     }
 }
 
