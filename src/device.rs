@@ -37,12 +37,14 @@ pub struct QueueFamilyCriteria {
 
 impl QueueFamilyCriteria {
     /// Queue family criteria that are always met.
+    #[inline]
     pub fn none() -> QueueFamilyCriteria {
         QueueFamilyCriteria::default()
     }
 
     /// The criteria are only met if the queue family supports graphics and
     /// presentation.
+    #[inline]
     pub fn graphics_present() -> QueueFamilyCriteria {
         QueueFamilyCriteria::none()
             .must_support(vk::QueueFlags::GRAPHICS)
@@ -51,6 +53,7 @@ impl QueueFamilyCriteria {
 
     /// Tries to match the queue family that's the closest to being a pure
     /// transfer queue.
+    #[inline]
     pub fn preferably_separate_transfer() -> QueueFamilyCriteria {
         QueueFamilyCriteria::none()
             .must_support(vk::QueueFlags::TRANSFER)
@@ -59,6 +62,7 @@ impl QueueFamilyCriteria {
 
     /// Add an requirement that these queue flags must be present in the
     /// queue family.
+    #[inline]
     pub fn must_support(mut self, must_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.must_support |= must_support;
         self
@@ -66,6 +70,7 @@ impl QueueFamilyCriteria {
 
     /// Add an recommendation that these queue flags should be present in the
     /// queue family.
+    #[inline]
     pub fn should_support(mut self, should_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.should_support |= should_support;
         self
@@ -73,6 +78,7 @@ impl QueueFamilyCriteria {
 
     /// Add an requirement that these queue flags must **not** be present in the
     /// queue family.
+    #[inline]
     pub fn must_not_support(mut self, must_not_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.must_not_support |= must_not_support;
         self
@@ -80,18 +86,21 @@ impl QueueFamilyCriteria {
 
     /// Add an recommendation that these queue flags should **not** be present in the
     /// queue family.
+    #[inline]
     pub fn should_not_support(mut self, should_not_support: vk::QueueFlags) -> QueueFamilyCriteria {
         self.should_not_support |= should_not_support;
         self
     }
 
     /// Require that the queue family must support presentation.
+    #[inline]
     pub fn must_support_presentation(mut self) -> QueueFamilyCriteria {
         self.presentation_support = Some(true);
         self
     }
 
     /// Require that the queue family must not support presentation.
+    #[inline]
     pub fn must_not_support_presentation(mut self) -> QueueFamilyCriteria {
         self.presentation_support = Some(false);
         self
@@ -193,6 +202,7 @@ pub struct QueueSetup {
 impl QueueSetup {
     /// Create a new custom queue setup with simplified arguments.
     /// Queue priorities will all be 1.0 and all flags will be empty.
+    #[inline]
     pub fn simple(queue_family_index: u32, queue_count: usize) -> QueueSetup {
         QueueSetup {
             flags: vk::DeviceQueueCreateFlags::empty(),
@@ -201,6 +211,7 @@ impl QueueSetup {
         }
     }
 
+    #[inline]
     fn as_vulkan(&self) -> vk::DeviceQueueCreateInfoBuilder {
         vk::DeviceQueueCreateInfoBuilder::new()
             .flags(self.flags)
@@ -238,31 +249,37 @@ pub struct DeviceMetadata {
 
 impl DeviceMetadata {
     /// The device this metadata belongs to.
+    #[inline]
     pub fn device_handle(&self) -> vk::Device {
         self.device_handle
     }
 
     /// The physical device this device belongs to.
+    #[inline]
     pub fn physical_device(&self) -> vk::PhysicalDevice {
         self.physical_device
     }
 
     /// The surface this device was created for.
+    #[inline]
     pub fn surface(&self) -> Option<vk::SurfaceKHR> {
         self.surface
     }
 
     /// Properties of the physical device.
+    #[inline]
     pub fn properties(&self) -> &vk::PhysicalDeviceProperties {
         &self.properties
     }
 
     /// Name of the physical device.
+    #[inline]
     pub fn device_name(&self) -> Cow<str> {
         unsafe { CStr::from_ptr(self.properties.device_name.as_ptr()).to_string_lossy() }
     }
 
     /// Type of the physical device.
+    #[inline]
     pub fn device_type(&self) -> vk::PhysicalDeviceType {
         self.properties.device_type
     }
@@ -270,6 +287,7 @@ impl DeviceMetadata {
     /// Returns a queue and the index of the queue family it belongs to.
     /// The best suited queue family meeting the criteria will be chosen.
     /// `queue_index` is the index within the queue family.
+    #[inline]
     pub fn device_queue(
         &self,
         instance: &InstanceLoader,
@@ -291,26 +309,31 @@ impl DeviceMetadata {
     }
 
     /// The queue setups which are in use.
+    #[inline]
     pub fn queue_setups(&self) -> &[QueueSetup] {
         &self.queue_setups
     }
 
     /// The memory properties of the physical device.
+    #[inline]
     pub fn memory_properties(&self) -> &vk::PhysicalDeviceMemoryProperties {
         &self.memory_properties
     }
 
     /// The queue family properties of the physical device.
+    #[inline]
     pub fn queue_family_properties(&self) -> &[vk::QueueFamilyProperties] {
         &self.queue_family_properties
     }
 
     /// List of all enabled extensions in the instance.
+    #[inline]
     pub fn enabled_extensions(&self) -> &[CString] {
         &self.enabled_extensions
     }
 
     /// Returns true if `extension` is enabled.
+    #[inline]
     pub unsafe fn is_extension_enabled(&self, extension: *const c_char) -> bool {
         let qry = CStr::from_ptr(extension);
         self.enabled_extensions.iter().any(|i| i.as_c_str() == qry)
@@ -374,6 +397,7 @@ pub struct DeviceBuilder<'a> {
 
 impl<'a> DeviceBuilder<'a> {
     /// Create a new device builder.
+    #[inline]
     pub fn new() -> Self {
         DeviceBuilder::with_loader_builder(DeviceLoaderBuilder::new())
     }
@@ -422,6 +446,7 @@ impl<'a> DeviceBuilder<'a> {
     ///     Ok(Some(queue_setup))
     /// }
     /// ```
+    #[inline]
     pub fn custom_queue_setup(mut self, custom_queue_setup: Box<CustomQueueSetupFn>) -> Self {
         self.queue_setup_fn = Some(custom_queue_setup);
         self
@@ -429,6 +454,7 @@ impl<'a> DeviceBuilder<'a> {
 
     /// Allows to specify custom criteria for a physical device.
     /// This can for example be used to check for limits.
+    #[inline]
     pub fn additional_suitability(
         mut self,
         additional_suitability: Box<AdditionalSuitabilityFn>,
@@ -438,6 +464,7 @@ impl<'a> DeviceBuilder<'a> {
     }
 
     /// Surface to use to check for presentation support in queue families.
+    #[inline]
     pub fn for_surface(mut self, surface: vk::SurfaceKHR) -> Self {
         self.surface = Some(surface);
         self
@@ -445,12 +472,14 @@ impl<'a> DeviceBuilder<'a> {
 
     /// Prioritise devices of these types when choosing a device.
     /// The further ahead, the higher the priority.
+    #[inline]
     pub fn prioritise_device_types(mut self, types: &[vk::PhysicalDeviceType]) -> Self {
         self.prioritised_device_types = types.into();
         self
     }
 
     /// The queue family chosen by the criteria will be enabled on the device.
+    #[inline]
     pub fn queue_family(mut self, criteria: QueueFamilyCriteria) -> Self {
         self.queue_family_criteria.push(criteria);
         self
@@ -458,6 +487,7 @@ impl<'a> DeviceBuilder<'a> {
 
     /// Prefer a device which has at least one `DEVICE_LOCAL` memory heap with
     /// a minimum of `size` bytes of memory.
+    #[inline]
     pub fn prefer_device_memory_size(mut self, size: vk::DeviceSize) -> Self {
         self.preferred_device_memory_size = Some(size);
         self
@@ -465,6 +495,7 @@ impl<'a> DeviceBuilder<'a> {
 
     /// Require a device which has at least one `DEVICE_LOCAL` memory heap with
     /// a minimum of `size` bytes of memory.
+    #[inline]
     pub fn require_device_memory_size(mut self, size: vk::DeviceSize) -> Self {
         self.required_device_memory_size = Some(size);
         self
@@ -472,6 +503,7 @@ impl<'a> DeviceBuilder<'a> {
 
     /// Prefer a device which supports `extension`.
     /// The extension will only be enabled if it's supported.
+    #[inline]
     pub fn prefer_extension(mut self, extension: *const c_char) -> Self {
         self.extensions.push((extension, false));
         self
@@ -479,30 +511,35 @@ impl<'a> DeviceBuilder<'a> {
 
     /// Require a device which supports `extension`.
     /// The extension will be enabled.
+    #[inline]
     pub fn require_extension(mut self, extension: *const c_char) -> Self {
         self.extensions.push((extension, true));
         self
     }
 
     /// Prefer a device which supports this version.
+    #[inline]
     pub fn prefer_version(mut self, major: u32, minor: u32) -> Self {
         self.preferred_version = Some(vk::make_api_version(0, major, minor, 0));
         self
     }
 
     /// Prefer a device which supports this version.
+    #[inline]
     pub fn prefer_version_raw(mut self, version: u32) -> Self {
         self.preferred_version = Some(version);
         self
     }
 
     /// Require the device to support this version.
+    #[inline]
     pub fn require_version(mut self, major: u32, minor: u32) -> Self {
         self.required_version = vk::make_api_version(0, major, minor, 0);
         self
     }
 
     /// Require the device to support this version.
+    #[inline]
     pub fn require_version_raw(mut self, version: u32) -> Self {
         self.required_version = version;
         self
@@ -511,6 +548,7 @@ impl<'a> DeviceBuilder<'a> {
     /// Require these features to be present for the device.
     /// The elements of the pointer chain will only be considered if possible.
     /// The features will be enabled.
+    #[inline]
     pub fn require_features(mut self, features: &'a vk::PhysicalDeviceFeatures2) -> Self {
         self.required_features = Some(features);
         self
@@ -518,12 +556,14 @@ impl<'a> DeviceBuilder<'a> {
 
     /// Skip the selection logic and always select the physical device at the
     /// specified index.
+    #[inline]
     pub fn select_nth_unconditionally(mut self, n: usize) -> Self {
         self.unconditional_nth = Some(n);
         self
     }
 
     /// Allocation callback to use for internal Vulkan calls in the builder.
+    #[inline]
     pub fn allocation_callbacks(mut self, allocator: vk::AllocationCallbacks) -> Self {
         self.allocator = Some(allocator);
         self

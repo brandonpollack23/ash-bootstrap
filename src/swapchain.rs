@@ -79,6 +79,7 @@ impl Swapchain {
     ///
     /// - `device` must match the `device` passed to [`Swapchain::new`].
     /// - Access to images obtained from [`images`](Self::images) must be externally synchronized.
+    #[inline]
     pub unsafe fn destroy(&mut self, device: &DeviceLoader) {
         for frame in &self.frames {
             device.destroy_fence(frame.complete, None);
@@ -96,28 +97,33 @@ impl Swapchain {
 
     /// Force the swapchain to be rebuilt on the next [`acquire`](Self::acquire) call, passing in
     /// the surface's current size.
+    #[inline]
     pub fn update(&mut self, extent: vk::Extent2D) {
         self.extent = extent;
         self.needs_rebuild = true;
     }
 
     /// Maximum number of frames that may be concurrently rendered.
+    #[inline]
     pub fn frames_in_flight(&self) -> usize {
         self.frames.len()
     }
 
     /// Latest set of swapchain images, keyed by [`AcquiredFrame::image_index`].
+    #[inline]
     pub fn images(&self) -> &[vk::Image] {
         &self.images
     }
 
     /// Format of images in [`images`](Self::images), and the color space that will be used to
     /// present them.
+    #[inline]
     pub fn format(&self) -> vk::SurfaceFormatKHR {
         self.format
     }
 
     /// Dimensions of images in [`images`](Self::images).
+    #[inline]
     pub fn extent(&self) -> vk::Extent2D {
         self.extent
     }
@@ -297,6 +303,7 @@ impl Swapchain {
     ///   previous [`acquire`](Self::acquire) call which has not yet been passed to queue_present.
     /// - A command buffer that will signal `render_complete` after finishing access to the
     ///   `image_index` element of [`images`](Self::images) must have been submitted.
+    #[inline]
     pub unsafe fn queue_present(
         &mut self,
         device: &DeviceLoader,
@@ -334,41 +341,48 @@ pub struct SwapchainOptions {
 
 impl SwapchainOptions {
     /// Uses the default values.
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Number of frames that may be concurrently worked on, including recording on the CPU. Defaults to 2.
+    #[inline]
     pub fn frames_in_flight(&mut self, frames: usize) -> &mut Self {
         self.frames_in_flight = frames;
         self
     }
 
     /// Preference-ordered list of image formats and color spaces. Defaults to 8-bit sRGB.
+    #[inline]
     pub fn format_preference(&mut self, formats: &[vk::SurfaceFormatKHR]) -> &mut Self {
         self.format_preference = formats.into();
         self
     }
 
     /// Preference-ordered list of presentation modes. Defaults to [`vk::PresentModeKHR::FIFO_KHR`].
+    #[inline]
     pub fn present_mode_preference(&mut self, modes: &[vk::PresentModeKHR]) -> &mut Self {
         self.present_mode_preference = modes.into();
         self
     }
 
     /// Required swapchain image usage flags. Defaults to [`vk::ImageUsageFlags::COLOR_ATTACHMENT`].
+    #[inline]
     pub fn usage(&mut self, usage: vk::ImageUsageFlags) -> &mut Self {
         self.usage = usage;
         self
     }
 
     /// Requires swapchain image sharing mode. Defaults to [`vk::SharingMode::EXCLUSIVE`].
+    #[inline]
     pub fn sharing_mode(&mut self, mode: vk::SharingMode) -> &mut Self {
         self.sharing_mode = mode;
         self
     }
 
     /// Requires swapchain image composite alpha. Defaults to [`vk::CompositeAlphaFlagBitsKHR::OPAQUE_KHR`].
+    #[inline]
     pub fn composite_alpha(&mut self, value: vk::CompositeAlphaFlagBitsKHR) -> &mut Self {
         self.composite_alpha = value;
         self
