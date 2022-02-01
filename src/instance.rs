@@ -53,7 +53,8 @@ pub unsafe extern "system" fn default_debug_callback(
     let message_type = message_type.strip_suffix("_EXT").unwrap();
 
     let message = CStr::from_ptr((*p_callback_data).p_message).to_string_lossy();
-    eprintln!("[{}: {}]\n{}", message_severity, message_type, message);
+    // \x1b[1m{string}\x1b[0m - bold text.
+    eprintln!("\x1b[1m{message_severity}\x1b[0m | \x1b[1m{message_type}\x1b[0m\n{message}");
 
     vk::FALSE
 }
@@ -69,42 +70,50 @@ pub struct InstanceMetadata {
 
 impl InstanceMetadata {
     /// The instance this metadata belongs to.
+    #[inline]
     pub fn instance_handle(&self) -> vk::Instance {
         self.instance_handle
     }
 
     /// Retrieve the used instance API version.
+    #[inline]
     pub fn api_version_raw(&self) -> u32 {
         self.api_version
     }
 
     /// Retrieve the used instance API major version.
+    #[inline]
     pub fn api_version_major(&self) -> u32 {
         vk::api_version_major(self.api_version)
     }
 
     /// Retrieve the used instance API minor version.
+    #[inline]
     pub fn api_version_minor(&self) -> u32 {
         vk::api_version_minor(self.api_version)
     }
 
     /// List of all enabled layers in the instance.
+    #[inline]
     pub fn enabled_layers(&self) -> &[CString] {
         &self.enabled_layers
     }
 
     /// Returns true if `layer` is enabled.
+    #[inline]
     pub unsafe fn is_layer_enabled(&self, layer: *const c_char) -> bool {
         let qry = CStr::from_ptr(layer);
         self.enabled_layers.iter().any(|e| e.as_c_str() == qry)
     }
 
     /// List of all enabled extensions in the instance.
+    #[inline]
     pub fn enabled_extensions(&self) -> &[CString] {
         &self.enabled_extensions
     }
 
     /// Returns true if `extension` is enabled.
+    #[inline]
     pub unsafe fn is_extension_enabled(&self, extension: *const c_char) -> bool {
         let qry = CStr::from_ptr(extension);
         self.enabled_extensions.iter().any(|i| i.as_c_str() == qry)
@@ -162,12 +171,14 @@ pub struct InstanceBuilder<'a> {
 
 impl<'a> InstanceBuilder<'a> {
     /// Create a new instance builder with opinionated defaults.
+    #[inline]
     pub fn new() -> Self {
         InstanceBuilder::with_loader_builder(InstanceLoaderBuilder::new())
     }
 
     /// Create a new instance builder with a custom
     /// [`erupt::InstanceLoaderBuilder`] and opinionated defaults.
+    #[inline]
     pub fn with_loader_builder(loader_builder: InstanceLoaderBuilder<'a>) -> Self {
         InstanceBuilder {
             loader_builder,
@@ -192,48 +203,56 @@ impl<'a> InstanceBuilder<'a> {
     }
 
     /// Application name to advertise.
+    #[inline]
     pub fn app_name(mut self, app_name: &str) -> Result<Self, NulError> {
         self.app_name = Some(CString::new(app_name)?);
         Ok(self)
     }
 
     /// Application version to advertise.
+    #[inline]
     pub fn app_version(mut self, major: u32, minor: u32) -> Self {
         self.app_version = Some(vk::make_api_version(0, major, minor, 0));
         self
     }
 
     /// Application version to advertise.
+    #[inline]
     pub fn app_version_raw(mut self, app_version: u32) -> Self {
         self.app_version = Some(app_version);
         self
     }
 
     /// Engine name to advertise.
+    #[inline]
     pub fn engine_name(mut self, engine_name: &str) -> Result<Self, NulError> {
         self.engine_name = Some(CString::new(engine_name)?);
         Ok(self)
     }
 
     /// Engine version to advertise.
+    #[inline]
     pub fn engine_version(mut self, major: u32, minor: u32) -> Self {
         self.engine_version = Some(vk::make_api_version(0, major, minor, 0));
         self
     }
 
     /// Engine version to advertise.
+    #[inline]
     pub fn engine_version_raw(mut self, engine_version: u32) -> Self {
         self.engine_version = Some(engine_version);
         self
     }
 
     /// Instance API version to be used as minimum requirement.
+    #[inline]
     pub fn require_api_version(mut self, major: u32, minor: u32) -> Self {
         self.required_api_version = vk::make_api_version(0, major, minor, 0);
         self
     }
 
     /// Instance API version to be used as minimum requirement.
+    #[inline]
     pub fn require_api_version_raw(mut self, api_version: u32) -> Self {
         self.required_api_version = api_version;
         self
@@ -241,6 +260,7 @@ impl<'a> InstanceBuilder<'a> {
 
     /// Instance API version to request. If it is not supported, fall back to
     /// the highest supported version.
+    #[inline]
     pub fn request_api_version(mut self, major: u32, minor: u32) -> Self {
         self.requested_api_version = Some(vk::make_api_version(0, major, minor, 0));
         self
@@ -248,40 +268,46 @@ impl<'a> InstanceBuilder<'a> {
 
     /// Instance API version to request. If it is not supported, fall back to
     /// the highest supported version.
+    #[inline]
     pub fn request_api_version_raw(mut self, api_version: u32) -> Self {
         self.requested_api_version = Some(api_version);
         self
     }
 
     /// Try to enable this layer, ignore if it's not supported
+    #[inline]
     pub fn request_layer(mut self, layer: *const c_char) -> Self {
         self.layers.push((layer, false));
         self
     }
 
     /// Enable this layer, fail if it's not supported.
+    #[inline]
     pub fn require_layer(mut self, layer: *const c_char) -> Self {
         self.layers.push((layer, true));
         self
     }
 
     /// Try to enable this extension, ignore if it is not supported.
+    #[inline]
     pub fn request_extension(mut self, extension: *const c_char) -> Self {
         self.extensions.push((extension, false));
         self
     }
 
     /// Enable this extension, fail if it's not supported.
+    #[inline]
     pub fn require_extension(mut self, extension: *const c_char) -> Self {
         self.extensions.push((extension, true));
         self
     }
 
     #[cfg(feature = "surface")]
-    /// Adds an requirement on all Vulkan extensions neceessary to create a
+    /// Adds an requirement on all Vulkan extensions necessary to create a
     /// surface on `window_handle`. You can also manually add these extensions.
     /// Returns `None` if the corresponding Vulkan surface extensions couldn't
     /// be found. This is only supported on feature `surface`.
+    #[inline]
     pub fn require_surface_extensions(
         mut self,
         window_handle: &impl raw_window_handle::HasRawWindowHandle,
@@ -294,6 +320,7 @@ impl<'a> InstanceBuilder<'a> {
     }
 
     /// Add Khronos validation layers.
+    #[inline]
     pub fn validation_layers(mut self, validation_layers: ValidationLayers) -> Self {
         match validation_layers {
             ValidationLayers::Require | ValidationLayers::Request => {
@@ -313,6 +340,7 @@ impl<'a> InstanceBuilder<'a> {
 
     /// Try to create a debug messenger with the config provided by
     /// `debug_messenger`.
+    #[inline]
     pub fn request_debug_messenger(mut self, debug_messenger: DebugMessenger) -> Self {
         if !matches!(debug_messenger, DebugMessenger::Disable) {
             self.extensions
@@ -324,6 +352,7 @@ impl<'a> InstanceBuilder<'a> {
     }
 
     /// Filter for the severity of debug messages.
+    #[inline]
     pub fn debug_message_severity(
         mut self,
         severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -333,12 +362,14 @@ impl<'a> InstanceBuilder<'a> {
     }
 
     /// Filter for the type of debug messages.
+    #[inline]
     pub fn debug_message_type(mut self, ty: vk::DebugUtilsMessageTypeFlagsEXT) -> Self {
         self.debug_message_type = ty;
         self
     }
 
     /// Enable an additional feature in the validation layers.
+    #[inline]
     pub fn enable_validation_feature(
         mut self,
         validation_feature: vk::ValidationFeatureEnableEXT,
@@ -348,6 +379,7 @@ impl<'a> InstanceBuilder<'a> {
     }
 
     /// Disable an feature in the validation layers.
+    #[inline]
     pub fn disable_validation_feature(
         mut self,
         validation_feature: vk::ValidationFeatureDisableEXT,
@@ -357,6 +389,7 @@ impl<'a> InstanceBuilder<'a> {
     }
 
     /// Allocation callback to use for internal Vulkan calls in the builder.
+    #[inline]
     pub fn allocation_callbacks(mut self, allocator: vk::AllocationCallbacks) -> Self {
         self.allocator = Some(allocator);
         self

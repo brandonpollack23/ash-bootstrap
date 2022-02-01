@@ -15,8 +15,8 @@ Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
 
 ## Example
 
-```rust
-let entry = EntryLoader::new().unwrap();
+```ignore
+let entry = erupt::EntryLoader::new().unwrap();
 let instance_builder = InstanceBuilder::new()
     .validation_layers(ValidationLayers::Request)
     .request_debug_messenger(DebugMessenger::Default)
