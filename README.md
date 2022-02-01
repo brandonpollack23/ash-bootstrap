@@ -1,4 +1,4 @@
-<img src="https://gitlab.com/Friz64/erupt/-/raw/main/erupt-bootstrap/logo.svg" height=200>
+<img src="logo.svg" height=200>
 
 # erupt-bootstrap
 
