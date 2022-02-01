@@ -1,3 +1,4 @@
+#![doc(html_logo_url = "https://gitlab.com/Friz64/erupt-bootstrap/-/raw/main/logo.svg")]
 #![allow(clippy::missing_safety_doc)]
 #![warn(missing_docs)]
 /*!
@@ -15,7 +16,7 @@ Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
 
 ## Example
 
-```ignore
+```rust,ignore
 let entry = erupt::EntryLoader::new().unwrap();
 let instance_builder = InstanceBuilder::new()
     .validation_layers(ValidationLayers::Request)
@@ -51,9 +52,15 @@ let transfer = device_metadata
     .unwrap();
 ```
 
-For more examples, visit the [git repo](https://gitlab.com/Friz64/erupt-bootstrap).
+For more examples, visit the [git repo](https://gitlab.com/Friz64/erupt-bootstrap/-/tree/main/examples).
 
 ## Licensing
+
+The logo contains the Volcano Emoji of [Twemoji](https://twemoji.twitter.com/)
+([License](https://creativecommons.org/licenses/by/4.0/)). The name "erupt" was
+added on top of the volcano. The boot is the ["Hiking Boot" from Openclipart](
+https://openclipart.org/detail/182950/hiking-boot),
+released into the Public Domain.
 
 This project is licensed under the [zlib License].
 

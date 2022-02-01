@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added logo
+
+### Changed
+
+- Make default Vulkan Callback output easier to read
+- Inline builder methods
+
 ## [0.2.2] - 2022-01-30
 
 ### Fixed
