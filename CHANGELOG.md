@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2022-02-01
+
 ### Added
 
 - Added logo
@@ -44,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _Initial Development_
 
-[Unreleased]: https://gitlab.com/Friz64/erupt-bootstrap/-/compare/v0.2.2...main
+[Unreleased]: https://gitlab.com/Friz64/erupt-bootstrap/-/compare/v0.2.3...main
+[0.2.3]: https://gitlab.com/Friz64/erupt-bootstrap/-/compare/v0.2.2...v0.2.3
 [0.2.2]: https://gitlab.com/Friz64/erupt-bootstrap/-/compare/v0.2.1...v0.2.2
 [0.2.1]: https://gitlab.com/Friz64/erupt-bootstrap/-/compare/v0.2.0...v0.2.1
 [0.2.0]: https://gitlab.com/Friz64/erupt-bootstrap/-/compare/v0.1.0...v0.2.0
