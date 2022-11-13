@@ -5,7 +5,7 @@
 //!
 //! [Ralith]: https://github.com/Ralith
 
-use erupt::{try_vk, utils::VulkanResult, vk, DeviceLoader, InstanceLoader, SmallVec};
+use erupt::{try_vk, utils::VulkanResult, vk, DeviceLoader, InstanceLoader, SmallVec, ObjectHandle};
 use std::{collections::VecDeque, mem};
 
 /// Manages synchronizing and rebuilding a Vulkan swapchain.

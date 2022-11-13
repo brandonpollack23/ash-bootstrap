@@ -1,8 +1,6 @@
 //! Device creation utils.
 use crate::InstanceMetadata;
-use erupt::{
-    vk, DeviceLoader, DeviceLoaderBuilder, ExtendableFrom, InstanceLoader, LoaderError, SmallVec,
-};
+use erupt::{vk, DeviceLoader, DeviceLoaderBuilder, ExtendableFrom, InstanceLoader, LoaderError, SmallVec, ObjectHandle};
 use std::{
     borrow::Cow,
     collections::HashSet,
