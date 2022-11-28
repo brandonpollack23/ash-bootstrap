@@ -1,6 +1,5 @@
 //! Device creation utils.
 use crate::InstanceMetadata;
-use erupt::{vk, DeviceLoader, DeviceLoaderBuilder, ExtendableFrom, InstanceLoader, LoaderError, SmallVec, ObjectHandle};
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -8,6 +7,8 @@ use std::{
     hash::{Hash, Hasher},
     os::raw::{c_char, c_float},
 };
+use ash::vk;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 /// Criteria for queue families.

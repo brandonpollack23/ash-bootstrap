@@ -5,8 +5,9 @@
 //!
 //! [Ralith]: https://github.com/Ralith
 
-use erupt::{try_vk, utils::VulkanResult, vk, DeviceLoader, InstanceLoader, SmallVec, ObjectHandle};
 use std::{collections::VecDeque, mem};
+use ash::prelude::VkResult;
+use ash::vk;
 
 /// Manages synchronizing and rebuilding a Vulkan swapchain.
 pub struct Swapchain {
@@ -142,12 +143,12 @@ impl Swapchain {
         instance: &InstanceLoader,
         device: &DeviceLoader,
         timeout_ns: u64,
-    ) -> VulkanResult<AcquiredFrame> {
+    ) -> VkResult<AcquiredFrame> {
         let frame_index = self.frame_index;
         let next_frame_index = (self.frame_index + 1) % self.frames.len();
         let frame = &self.frames[frame_index];
         let acquire = frame.acquire;
-        try_vk!(device.wait_for_fences(&[frame.complete], true, timeout_ns));
+        device.wait_for_fences(&[frame.complete], true, timeout_ns)?;
 
         // Destroy swapchains that are guaranteed not to be in use now that this frame has finished
         while let Some(&(swapchain, generation)) = self.old_swapchains.front() {
@@ -188,8 +189,8 @@ impl Swapchain {
             self.needs_rebuild = true;
 
             // Rebuild swapchain
-            let surface_capabilities = try_vk!(instance
-                .get_physical_device_surface_capabilities_khr(self.physical_device, self.surface));
+            let surface_capabilities = instance
+                .get_physical_device_surface_capabilities_khr(self.physical_device, self.surface)?;
 
             self.extent = match surface_capabilities.current_extent.width {
                 // If Vulkan doesn't know, the windowing system probably does. Known to apply at
@@ -210,11 +211,11 @@ impl Swapchain {
                 surface_capabilities.current_transform
             };
 
-            let present_modes = try_vk!(instance.get_physical_device_surface_present_modes_khr(
+            let present_modes = instance.get_physical_device_surface_present_modes_khr(
                 self.physical_device,
                 self.surface,
                 None
-            ));
+            )?;
             let present_mode = match present_modes
                 .iter()
                 .filter_map(|&mode| {
@@ -242,11 +243,11 @@ impl Swapchain {
                 desired_image_count
             };
 
-            let surface_formats = try_vk!(instance.get_physical_device_surface_formats_khr(
+            let surface_formats = instance.get_physical_device_surface_formats_khr(
                 self.physical_device,
                 self.surface,
                 None
-            ));
+            )?;
             match surface_formats
                 .iter()
                 .filter_map(|&format| {
@@ -268,7 +269,7 @@ impl Swapchain {
                 self.old_swapchains
                     .push_back((self.handle, self.generation));
             }
-            let handle = try_vk!(device.create_swapchain_khr(
+            let handle = device.create_swapchain_khr(
                 &vk::SwapchainCreateInfoKHRBuilder::new()
                     .surface(self.surface)
                     .min_image_count(image_count)
@@ -284,10 +285,10 @@ impl Swapchain {
                     .image_array_layers(1)
                     .old_swapchain(mem::replace(&mut self.handle, vk::SwapchainKHR::null())),
                 None,
-            ));
+            )?;
             self.generation = self.generation.wrapping_add(1);
             self.handle = handle;
-            self.images = try_vk!(device.get_swapchain_images_khr(handle, None));
+            self.images = device.get_swapchain_images_khr(handle, None)?;
             self.needs_rebuild = false;
         }
     }

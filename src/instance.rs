@@ -1,13 +1,11 @@
 //! Instance creation utils.
-use erupt::{
-    cstr, vk, CustomEntryLoader, ExtendableFrom, InstanceLoader, InstanceLoaderBuilder,
-    LoaderError, SmallVec,
-};
 use std::{
     ffi::{c_void, CStr, CString, NulError},
     fmt,
     os::raw::c_char,
 };
+use ash::vk;
+use cstr::cstr;
 use thiserror::Error;
 
 /// Require, request or disable validation layers.
