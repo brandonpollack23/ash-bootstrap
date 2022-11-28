@@ -7,6 +7,7 @@ use std::{
     hash::{Hash, Hasher},
     os::raw::{c_char, c_float},
 };
+use ash::prelude::VkResult;
 use ash::vk;
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -375,6 +376,127 @@ impl From<bool> for DeviceSuitability {
 /// to consider in the selection process.
 pub type AdditionalSuitabilityFn =
     dyn FnMut(&InstanceLoader, vk::PhysicalDevice) -> DeviceSuitability;
+
+/// Builder for an device loader.
+pub struct DeviceLoaderBuilder<'a> {
+    create_device_fn: Option<
+        &'a mut dyn FnMut(
+            vk::PhysicalDevice,
+            &vk::DeviceCreateInfo,
+            Option<&vk::AllocationCallbacks>,
+        ) -> VkResult<vk::Device>,
+    >,
+    symbol_fn: Option<
+        &'a mut dyn FnMut(
+            vk::Device,
+            *const c_char,
+        ) -> Option<vk::PFN_vkVoidFunction>,
+    >,
+    allocation_callbacks: Option<&'a vk::AllocationCallbacks>,
+}
+
+impl<'a> DeviceLoaderBuilder<'a> {
+    /// Create a new instance loader builder.
+    pub fn new() -> Self {
+        DeviceLoaderBuilder {
+            create_device_fn: None,
+            symbol_fn: None,
+            allocation_callbacks: None,
+        }
+    }
+
+    /// Specify a custom device creation function, to use in place of the
+    /// default.
+    ///
+    /// This may be useful when creating the device using e.g. OpenXR.
+    pub fn create_device_fn(
+        mut self,
+        create_device: &'a mut dyn FnMut(
+            vk::PhysicalDevice,
+            &vk::DeviceCreateInfo,
+            Option<&vk::AllocationCallbacks>,
+        ) -> VkResult<vk::Device>,
+    ) -> Self {
+        self.create_device_fn = Some(create_device);
+        self
+    }
+
+    /// Specify a custom symbol function, called to get device function
+    /// pointers, to use in place of the default.
+    pub fn symbol_fn(
+        mut self,
+        symbol: &'a mut impl FnMut(
+            vk::Device,
+            *const c_char,
+        ) -> Option<vk::PFN_vkVoidFunction>,
+    ) -> Self {
+        self.symbol_fn = Some(symbol);
+        self
+    }
+
+    /// Specify custom allocation callback functions.
+    pub fn allocation_callbacks(mut self, allocator: &'a vk::AllocationCallbacks) -> Self {
+        self.allocation_callbacks = Some(allocator);
+        self
+    }
+
+    /// Build the device loader. Ensure `create_info` is the same as used in the
+    /// creation of `device`.
+    pub unsafe fn build_with_existing_device(
+        self,
+        instance_loader: &'a InstanceLoader,
+        device: vk::Device,
+        create_info: &vk::DeviceCreateInfo,
+    ) -> Result<DeviceLoader, LoaderError> {
+        let device_enabled = {
+            let enabled_extensions = std::slice::from_raw_parts(
+                create_info.pp_enabled_extension_names,
+                create_info.enabled_extension_count as _,
+            );
+            let enabled_extensions: Vec<_> = enabled_extensions
+                .iter()
+                .map(|&ptr| CStr::from_ptr(ptr))
+                .collect();
+            // TODO NOW merge this part of the generator that generates all the *Enabled classes into the ash generator (or just patch it in seperate).
+            DeviceEnabled::new(&enabled_extensions)
+        };
+
+        let mut default_symbol = move |name| (instance_loader.get_device_proc_addr)(device, name);
+        let mut symbol: &mut dyn FnMut(
+            *const std::os::raw::c_char,
+        ) -> Option<vk::PFN_vkVoidFunction> = &mut default_symbol;
+        let mut user_symbol;
+        if let Some(internal_symbol) = self.symbol_fn {
+            user_symbol = move |name| internal_symbol(device, name);
+            symbol = &mut user_symbol;
+        }
+
+        DeviceLoader::custom(instance_loader, device, device_enabled, symbol)
+    }
+
+    /// Build the device loader. If you want to entirely create the device
+    /// yourself, use [`DeviceLoaderBuilder::build_with_existing_device`].
+    pub unsafe fn build(
+        mut self,
+        instance_loader: &'a InstanceLoader,
+        physical_device: vk::PhysicalDevice,
+        create_info: &vk::DeviceCreateInfo,
+    ) -> Result<ash::Device, LoaderError> {
+        let device = match &mut self.create_device_fn {
+            Some(create_device) => {
+                create_device(physical_device, create_info, self.allocation_callbacks)
+            }
+            None => instance_loader.create_device(
+                physical_device,
+                create_info,
+                self.allocation_callbacks,
+            ),
+        };
+
+        let device = device.result().map_err(LoaderError::VulkanError)?;
+        self.build_with_existing_device(instance_loader, device, create_info)
+    }
+}
 
 /// Allows to easily create an [`erupt::DeviceLoader`] and queues.
 pub struct DeviceBuilder<'a> {
