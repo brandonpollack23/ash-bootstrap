@@ -240,7 +240,7 @@ pub struct DeviceMetadata {
     properties: vk::PhysicalDeviceProperties,
     queue_setups: BootstrapSmallVec<QueueSetup>,
     memory_properties: vk::PhysicalDeviceMemoryProperties,
-    queue_family_properties: BootstrapSmallVec<vk::QueueFamilyProperties>,
+    queue_family_properties: Vec<vk::QueueFamilyProperties>,
     surface: Option<vk::SurfaceKHR>,
     enabled_extensions: BootstrapSmallVec<CString>,
 }
@@ -858,7 +858,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
 
         let features2_supported = instance_metadata.api_version_raw() >= vk::API_VERSION_1_1
             || instance_metadata
-                .is_extension_enabled(ash::extensions::khr::GetPhysicalDeviceProperties2::name() as *const _);
+                .is_extension_enabled(ash::extensions::khr::GetPhysicalDeviceProperties2::name().as_ptr());
         for candidate in perfect_candidates
             .into_iter()
             .chain(inperfect_candidates.into_iter())
@@ -878,7 +878,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
                 required_features = val;
 
                 if features2_supported {
-                    device_info = device_info.extend_from(&mut required_features);
+                    device_info = device_info.push_next(&mut required_features);
                 } else {
                     device_info = device_info.enabled_features(&required_features.features);
                 }
@@ -889,8 +889,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
                     candidate.physical_device,
                     &device_info,
                     self.allocator.as_ref(),
-                )
-                .result();
+                );
             match device_handle {
                 Ok(device_handle) => {
                     let device = self.loader_builder.build_with_existing_device(
@@ -901,7 +900,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
 
                     drop(queue_create_infos);
                     let device_metadata = DeviceMetadata {
-                        device_handle,
+                        device_handle: device.handle(),
                         physical_device: candidate.physical_device,
                         properties: candidate.properties,
                         queue_setups: candidate.queue_setups,

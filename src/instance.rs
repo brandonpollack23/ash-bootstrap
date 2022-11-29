@@ -156,13 +156,13 @@ pub struct InstanceLoaderBuilder<'a> {
         &'a mut dyn FnMut(
             &vk::InstanceCreateInfo,
             Option<&vk::AllocationCallbacks>,
-        ) -> VkResult<vk::Instance>,
+        ) -> VkResult<Instance>,
     >,
     symbol_fn: Option<
         &'a mut dyn FnMut(
             vk::Instance,
             *const std::os::raw::c_char,
-        ) -> Option<vk::PFN_vkVoidFunction>,
+        ) -> vk::PFN_vkVoidFunction,
     >,
     allocation_callbacks: Option<&'a vk::AllocationCallbacks>,
 }
@@ -186,7 +186,7 @@ impl<'a> InstanceLoaderBuilder<'a> {
         create_instance: &'a mut dyn FnMut(
             &vk::InstanceCreateInfo,
             Option<&vk::AllocationCallbacks>,
-        ) -> VkResult<vk::Instance>,
+        ) -> VkResult<Instance>,
     ) -> Self {
         self.create_instance_fn = Some(create_instance);
         self
@@ -199,7 +199,7 @@ impl<'a> InstanceLoaderBuilder<'a> {
         symbol: &'a mut impl FnMut(
             vk::Instance,
             *const std::os::raw::c_char,
-        ) -> Option<vk::PFN_vkVoidFunction>,
+        ) -> vk::PFN_vkVoidFunction,
     ) -> Self {
         self.symbol_fn = Some(symbol);
         self
@@ -216,13 +216,11 @@ impl<'a> InstanceLoaderBuilder<'a> {
         self,
         entry: &Entry,
         create_info: &vk::InstanceCreateInfo,
-    ) -> Result<Instance, LoadingError> {
+    ) -> VkResult<Instance> {
         let instance = match self.create_instance_fn {
             Some(create_instance) => create_instance(create_info, self.allocation_callbacks),
             None => entry.create_instance(create_info, self.allocation_callbacks),
-        };
-
-        let instance = instance.result().map_err(LoadingError::VulkanError)?;
+        }?;
 
         let mut version = vk::make_api_version(0, 1, 0, 0);
         if !create_info.p_application_info.is_null() {
@@ -241,27 +239,17 @@ impl<'a> InstanceLoaderBuilder<'a> {
             .map(|&ptr| CStr::from_ptr(ptr))
             .collect();
 
-        let mut default_symbol = move |name| (entry.get_instance_proc_addr)(instance, name);
+        let mut default_symbol = move |name| entry.get_instance_proc_addr(instance.handle(), name);
         let mut symbol: &mut dyn FnMut(
             *const std::os::raw::c_char,
-        ) -> Option<vk::PFN_vkVoidFunction> = &mut default_symbol;
+        ) -> vk::PFN_vkVoidFunction = &mut default_symbol;
         let mut user_symbol;
         if let Some(internal_symbol) = self.symbol_fn {
-            user_symbol = move |name| internal_symbol(instance, name);
+            user_symbol = move |name| internal_symbol(instance.handle(), name);
             symbol = &mut user_symbol;
         }
 
-        // let all_physical_device_extension_properties =
-        //     all_physical_device_extension_properties(&mut symbol, instance)?;
-        // let available_device_extensions: Vec<_> = all_physical_device_extension_properties
-        //     .iter()
-        //     .map(|properties| CStr::from_ptr(properties.extension_name.as_ptr()))
-        //     .collect();
-
-        // let instance_enabled =
-        //     InstanceEnabled::new(version, &enabled_extensions, &available_device_extensions)?;
-        // InstanceLoader::custom(entry, instance, instance_enabled, symbol)
-        Ok(Instance::load(symbol, instance))
+        Ok(Instance::load(&vk::StaticFn::load(symbol), instance.handle()))
     }
 }
 
