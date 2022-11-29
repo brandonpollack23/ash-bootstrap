@@ -8,7 +8,7 @@ use std::{
     os::raw::{c_char, c_float},
 };
 use ash::prelude::VkResult;
-use ash::vk;
+use ash::{Instance, LoadingError, vk};
 use smallvec::SmallVec;
 use thiserror::Error;
 
@@ -183,7 +183,7 @@ pub enum DeviceCreationError {
     RequirementsNotMet,
     /// The instance loader creation failed.
     #[error("loader creation error")]
-    LoaderCreation(#[from] LoaderError),
+    LoaderCreation(#[from] LoadingError),
 }
 
 /// Setup for [`vk::Queue`] creation. Used within [`CustomQueueSetupFn`].
@@ -440,48 +440,49 @@ impl<'a> DeviceLoaderBuilder<'a> {
         self
     }
 
-    /// Build the device loader. Ensure `create_info` is the same as used in the
-    /// creation of `device`.
-    pub unsafe fn build_with_existing_device(
-        self,
-        instance_loader: &'a InstanceLoader,
-        device: vk::Device,
-        create_info: &vk::DeviceCreateInfo,
-    ) -> Result<DeviceLoader, LoaderError> {
-        let device_enabled = {
-            let enabled_extensions = std::slice::from_raw_parts(
-                create_info.pp_enabled_extension_names,
-                create_info.enabled_extension_count as _,
-            );
-            let enabled_extensions: Vec<_> = enabled_extensions
-                .iter()
-                .map(|&ptr| CStr::from_ptr(ptr))
-                .collect();
-            // TODO NOW merge this part of the generator that generates all the *Enabled classes into the ash generator (or just patch it in seperate).
-            DeviceEnabled::new(&enabled_extensions)
-        };
+    // TODO NOW delete or fix
+    // /// Build the device loader. Ensure `create_info` is the same as used in the
+    // /// creation of `device`.
+    // pub unsafe fn build_with_existing_device(
+    //     self,
+    //     instance_loader: &'a ash::Instance,
+    //     device: vk::Device,
+    //     create_info: &vk::DeviceCreateInfo,
+    // ) -> Result<ash::Device, LoadingError> {
+    //     let device_enabled = {
+    //         let enabled_extensions = std::slice::from_raw_parts(
+    //             create_info.pp_enabled_extension_names,
+    //             create_info.enabled_extension_count as _,
+    //         );
+    //         let enabled_extensions: Vec<_> = enabled_extensions
+    //             .iter()
+    //             .map(|&ptr| CStr::from_ptr(ptr))
+    //             .collect();
+    //         // TODO NOW merge this part of the generator that generates all the *Enabled classes into the ash generator (or just patch it in seperate).
+    //         DeviceEnabled::new(&enabled_extensions)
+    //     };
+    //
+    //     let mut default_symbol = move |name| (instance_loader.get_device_proc_addr)(device, name);
+    //     let mut symbol: &mut dyn FnMut(
+    //         *const std::os::raw::c_char,
+    //     ) -> Option<vk::PFN_vkVoidFunction> = &mut default_symbol;
+    //     let mut user_symbol;
+    //     if let Some(internal_symbol) = self.symbol_fn {
+    //         user_symbol = move |name| internal_symbol(device, name);
+    //         symbol = &mut user_symbol;
+    //     }
+    //
+    //     DeviceLoader::custom(instance_loader, device, device_enabled, symbol)
+    // }
 
-        let mut default_symbol = move |name| (instance_loader.get_device_proc_addr)(device, name);
-        let mut symbol: &mut dyn FnMut(
-            *const std::os::raw::c_char,
-        ) -> Option<vk::PFN_vkVoidFunction> = &mut default_symbol;
-        let mut user_symbol;
-        if let Some(internal_symbol) = self.symbol_fn {
-            user_symbol = move |name| internal_symbol(device, name);
-            symbol = &mut user_symbol;
-        }
-
-        DeviceLoader::custom(instance_loader, device, device_enabled, symbol)
-    }
-
-    /// Build the device loader. If you want to entirely create the device
+    /// Build the device. If you want to entirely create the device
     /// yourself, use [`DeviceLoaderBuilder::build_with_existing_device`].
     pub unsafe fn build(
         mut self,
-        instance_loader: &'a InstanceLoader,
+        instance_loader: &'a Instance,
         physical_device: vk::PhysicalDevice,
         create_info: &vk::DeviceCreateInfo,
-    ) -> Result<ash::Device, LoaderError> {
+    ) -> Result<ash::Device, LoadingError> {
         let device = match &mut self.create_device_fn {
             Some(create_device) => {
                 create_device(physical_device, create_info, self.allocation_callbacks)
@@ -493,7 +494,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
             ),
         };
 
-        let device = device.result().map_err(LoaderError::VulkanError)?;
+        let device = device.result().map_err(LoadingError::LibraryLoadFailure)?;
         self.build_with_existing_device(instance_loader, device, create_info)
     }
 }

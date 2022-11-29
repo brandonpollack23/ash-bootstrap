@@ -23,6 +23,4 @@ default = ["surface"]
 surface = ["raw-window-handle"]
 
 [dev-dependencies]
-# Still need erupt to generate the "Features" which are disgustingly copied over in this hacky crap.
-erupt = "0.23.0+213"
 winit = "0.27"

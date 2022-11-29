@@ -6,6 +6,7 @@ use std::{
 };
 use ash::vk;
 use cstr::cstr;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 /// Require, request or disable validation layers.
