@@ -7,7 +7,8 @@
 
 use std::{collections::VecDeque, mem};
 use ash::prelude::VkResult;
-use ash::vk;
+use ash::{Device, Instance, vk};
+use crate::BootstrapSmallVec;
 
 /// Manages synchronizing and rebuilding a Vulkan swapchain.
 pub struct Swapchain {
@@ -20,7 +21,7 @@ pub struct Swapchain {
     physical_device: vk::PhysicalDevice,
     handle: vk::SwapchainKHR,
     generation: u64,
-    images: SmallVec<vk::Image>,
+    images: BootstrapSmallVec<vk::Image>,
     extent: vk::Extent2D,
     format: vk::SurfaceFormatKHR,
     needs_rebuild: bool,
@@ -35,7 +36,7 @@ impl Swapchain {
         options: SwapchainOptions,
         surface: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
-        device: &DeviceLoader,
+        device: &Device,
         extent: vk::Extent2D,
     ) -> Self {
         Self {
@@ -62,7 +63,7 @@ impl Swapchain {
             physical_device,
             handle: vk::SwapchainKHR::null(),
             generation: 0,
-            images: SmallVec::new(),
+            images: BootstrapSmallVec::new(),
             extent,
             format: vk::SurfaceFormatKHR::default(),
             needs_rebuild: true,
@@ -81,7 +82,7 @@ impl Swapchain {
     /// - `device` must match the `device` passed to [`Swapchain::new`].
     /// - Access to images obtained from [`images`](Self::images) must be externally synchronized.
     #[inline]
-    pub unsafe fn destroy(&mut self, device: &DeviceLoader) {
+    pub unsafe fn destroy(&mut self, device: &Device) {
         for frame in &self.frames {
             device.destroy_fence(frame.complete, None);
             device.destroy_semaphore(frame.acquire, None);
@@ -140,8 +141,8 @@ impl Swapchain {
     /// `device` passed to [`Swapchain::new`].
     pub unsafe fn acquire(
         &mut self,
-        instance: &InstanceLoader,
-        device: &DeviceLoader,
+        instance: &Instance,
+        device: &Device,
         timeout_ns: u64,
     ) -> VkResult<AcquiredFrame> {
         let frame_index = self.frame_index;
@@ -174,7 +175,7 @@ impl Swapchain {
                         device
                             .reset_fences(&[self.frames[frame_index].complete])
                             .unwrap();
-                        return VulkanResult::new_ok(AcquiredFrame {
+                        return VkResult::new_ok(AcquiredFrame {
                             image_index: index as usize,
                             frame_index,
                             ready: acquire,
@@ -183,7 +184,7 @@ impl Swapchain {
                         });
                     }
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {}
-                    Err(e) => return VulkanResult::new_err(e),
+                    Err(e) => return VkResult::new_err(e),
                 }
             };
             self.needs_rebuild = true;
@@ -206,7 +207,7 @@ impl Swapchain {
                 .supported_transforms
                 .contains(vk::SurfaceTransformFlagsKHR::IDENTITY_KHR)
             {
-                vk::SurfaceTransformFlagBitsKHR::IDENTITY_KHR
+                vk::SurfaceTransformFlagsKHR::IDENTITY
             } else {
                 surface_capabilities.current_transform
             };
@@ -230,7 +231,7 @@ impl Swapchain {
                 .min_by_key(|&(_, priority)| priority)
             {
                 Some((mode, _)) => mode,
-                None => return VulkanResult::new_err(vk::Result::ERROR_OUT_OF_DATE_KHR),
+                None => return VkResult::new_err(vk::Result::ERROR_OUT_OF_DATE_KHR),
             };
 
             let desired_image_count =
@@ -262,7 +263,7 @@ impl Swapchain {
                 .min_by_key(|&(_, priority)| priority)
             {
                 Some((format, _)) => self.format = format,
-                None => return VulkanResult::new_err(vk::Result::ERROR_OUT_OF_DATE_KHR),
+                None => return VkResult::new_err(vk::Result::ERROR_OUT_OF_DATE_KHR),
             };
 
             if self.handle != vk::SwapchainKHR::null() {
@@ -297,7 +298,7 @@ impl Swapchain {
     ///
     /// # Safety
     ///
-    /// In addition to the usual requirements of [`DeviceLoader::queue_present_khr`]:
+    /// In addition to the usual requirements of [`Device::queue_present_khr`]:
     ///
     /// - `device` must match the `device` passed to [`Swapchain::new`].
     /// - `image_index` must have been obtained from an [`AcquiredFrame::image_index`] from a
@@ -307,11 +308,11 @@ impl Swapchain {
     #[inline]
     pub unsafe fn queue_present(
         &mut self,
-        device: &DeviceLoader,
+        device: &Device,
         queue: vk::Queue,
         render_complete: vk::Semaphore,
         image_index: usize,
-    ) -> VulkanResult<()> {
+    ) -> VkResult<()> {
         let queue_present = device.queue_present_khr(
             queue,
             &vk::PresentInfoKHRBuilder::new()
@@ -322,7 +323,7 @@ impl Swapchain {
 
         if let vk::Result::SUBOPTIMAL_KHR | vk::Result::ERROR_OUT_OF_DATE_KHR = queue_present.raw {
             self.needs_rebuild = true;
-            VulkanResult::new_ok(())
+            Ok(())
         } else {
             queue_present
         }
@@ -337,7 +338,7 @@ pub struct SwapchainOptions {
     present_mode_preference: Vec<vk::PresentModeKHR>,
     usage: vk::ImageUsageFlags,
     sharing_mode: vk::SharingMode,
-    composite_alpha: vk::CompositeAlphaFlagBitsKHR,
+    composite_alpha: vk::CompositeAlphaFlagsKHR,
 }
 
 impl SwapchainOptions {
@@ -382,9 +383,9 @@ impl SwapchainOptions {
         self
     }
 
-    /// Requires swapchain image composite alpha. Defaults to [`vk::CompositeAlphaFlagBitsKHR::OPAQUE_KHR`].
+    /// Requires swapchain image composite alpha. Defaults to [`vk::CompositeAlphaFlagsKHR::OPAQUE_KHR`].
     #[inline]
-    pub fn composite_alpha(&mut self, value: vk::CompositeAlphaFlagBitsKHR) -> &mut Self {
+    pub fn composite_alpha(&mut self, value: vk::CompositeAlphaFlagsKHR) -> &mut Self {
         self.composite_alpha = value;
         self
     }
@@ -407,7 +408,7 @@ impl Default for SwapchainOptions {
             present_mode_preference: vec![vk::PresentModeKHR::FIFO_KHR],
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
-            composite_alpha: vk::CompositeAlphaFlagBitsKHR::OPAQUE_KHR,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE_KHR,
         }
     }
 }

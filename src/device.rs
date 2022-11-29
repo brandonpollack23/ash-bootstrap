@@ -1,5 +1,5 @@
 //! Device creation utils.
-use crate::InstanceMetadata;
+use crate::{InstanceMetadata, BootstrapSmallVec};
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -8,8 +8,8 @@ use std::{
     os::raw::{c_char, c_float},
 };
 use ash::prelude::VkResult;
-use ash::{Instance, LoadingError, vk};
-use smallvec::SmallVec;
+use ash::{Device, Instance, LoadingError, vk};
+use ash::extensions::khr::Surface;
 use thiserror::Error;
 
 /// Criteria for queue families.
@@ -111,12 +111,12 @@ impl QueueFamilyCriteria {
     /// Returns `Err(_)` when an internal Vulkan call failed.
     pub fn choose_queue_family<'a>(
         &self,
-        instance: &InstanceLoader,
+        ash_surface: &Surface,
         physical_device: vk::PhysicalDevice,
         queue_family_properties: &'a [vk::QueueFamilyProperties],
         surface: Option<vk::SurfaceKHR>,
     ) -> Result<Option<(u32, &'a vk::QueueFamilyProperties)>, vk::Result> {
-        let mut candidates = SmallVec::new();
+        let mut candidates = BootstrapSmallVec::new();
         for (i, queue_family_properties) in queue_family_properties.iter().enumerate() {
             let i = i as u32;
 
@@ -133,9 +133,8 @@ impl QueueFamilyCriteria {
                     (None, _) => true,
                     (Some(_), None) => false,
                     (Some(expected), Some(surface)) => unsafe {
-                        let support = instance
-                            .get_physical_device_surface_support_khr(physical_device, i, surface)
-                            .result()?;
+                        let support = ash_surface
+                            .get_physical_device_surface_support(physical_device, i, surface)?;
 
                         support == expected
                     },
@@ -240,11 +239,11 @@ pub struct DeviceMetadata {
     device_handle: vk::Device,
     physical_device: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
-    queue_setups: SmallVec<QueueSetup>,
+    queue_setups: BootstrapSmallVec<QueueSetup>,
     memory_properties: vk::PhysicalDeviceMemoryProperties,
-    queue_family_properties: SmallVec<vk::QueueFamilyProperties>,
+    queue_family_properties: BootstrapSmallVec<vk::QueueFamilyProperties>,
     surface: Option<vk::SurfaceKHR>,
-    enabled_extensions: SmallVec<CString>,
+    enabled_extensions: BootstrapSmallVec<CString>,
 }
 
 impl DeviceMetadata {
@@ -290,8 +289,8 @@ impl DeviceMetadata {
     #[inline]
     pub fn device_queue(
         &self,
-        instance: &InstanceLoader,
-        device: &DeviceLoader,
+        instance: &Instance,
+        device: &Device,
         criteria: QueueFamilyCriteria,
         queue_index: u32,
     ) -> Result<Option<(vk::Queue, u32)>, vk::Result> {
@@ -375,10 +374,10 @@ impl From<bool> for DeviceSuitability {
 /// Function used to specify a custom additional [`DeviceSuitability`]
 /// to consider in the selection process.
 pub type AdditionalSuitabilityFn =
-    dyn FnMut(&InstanceLoader, vk::PhysicalDevice) -> DeviceSuitability;
+    dyn FnMut(&Instance, vk::PhysicalDevice) -> DeviceSuitability;
 
 /// Builder for an device loader.
-pub struct DeviceLoaderBuilder<'a> {
+pub struct DeviceBuilder<'a> {
     create_device_fn: Option<
         &'a mut dyn FnMut(
             vk::PhysicalDevice,
@@ -395,10 +394,10 @@ pub struct DeviceLoaderBuilder<'a> {
     allocation_callbacks: Option<&'a vk::AllocationCallbacks>,
 }
 
-impl<'a> DeviceLoaderBuilder<'a> {
+impl<'a> DeviceBuilder<'a> {
     /// Create a new instance loader builder.
     pub fn new() -> Self {
-        DeviceLoaderBuilder {
+        DeviceBuilder {
             create_device_fn: None,
             symbol_fn: None,
             allocation_callbacks: None,
@@ -472,11 +471,11 @@ impl<'a> DeviceLoaderBuilder<'a> {
     //         symbol = &mut user_symbol;
     //     }
     //
-    //     DeviceLoader::custom(instance_loader, device, device_enabled, symbol)
+    //     Device::custom(instance_loader, device, device_enabled, symbol)
     // }
 
     /// Build the device. If you want to entirely create the device
-    /// yourself, use [`DeviceLoaderBuilder::build_with_existing_device`].
+    /// yourself, use [`DeviceBuilder::build_with_existing_device`].
     pub unsafe fn build(
         mut self,
         instance_loader: &'a Instance,
@@ -499,17 +498,17 @@ impl<'a> DeviceLoaderBuilder<'a> {
     }
 }
 
-/// Allows to easily create an [`erupt::DeviceLoader`] and queues.
-pub struct DeviceBuilder<'a> {
-    loader_builder: DeviceLoaderBuilder<'a>,
+/// Allows to easily create an [`erupt::Device`] and queues.
+pub struct DeviceLoaderBuilder<'a> {
+    loader_builder: DeviceBuilder<'a>,
     queue_setup_fn: Option<Box<CustomQueueSetupFn>>,
     additional_suitability_fn: Option<Box<AdditionalSuitabilityFn>>,
     surface: Option<vk::SurfaceKHR>,
-    prioritised_device_types: SmallVec<vk::PhysicalDeviceType>,
-    queue_family_criteria: SmallVec<QueueFamilyCriteria>,
+    prioritised_device_types: BootstrapSmallVec<vk::PhysicalDeviceType>,
+    queue_family_criteria: BootstrapSmallVec<QueueFamilyCriteria>,
     preferred_device_memory_size: Option<vk::DeviceSize>,
     required_device_memory_size: Option<vk::DeviceSize>,
-    extensions: SmallVec<(*const c_char, bool)>,
+    extensions: BootstrapSmallVec<(*const c_char, bool)>,
     preferred_version: Option<u32>,
     required_version: u32,
     required_features: Option<&'a vk::PhysicalDeviceFeatures2>,
@@ -517,25 +516,25 @@ pub struct DeviceBuilder<'a> {
     allocator: Option<vk::AllocationCallbacks>,
 }
 
-impl<'a> DeviceBuilder<'a> {
+impl<'a> DeviceLoaderBuilder<'a> {
     /// Create a new device builder.
     #[inline]
     pub fn new() -> Self {
-        DeviceBuilder::with_loader_builder(DeviceLoaderBuilder::new())
+        DeviceBuilder::with_loader_builder(DeviceBuilder::new())
     }
 
-    /// Create a new device builder with a custom [`DeviceLoaderBuilder`].
-    pub fn with_loader_builder(loader_builder: DeviceLoaderBuilder<'a>) -> Self {
-        DeviceBuilder {
+    /// Create a new device builder with a custom [`DeviceBuilder`].
+    pub fn with_loader_builder(loader_builder: DeviceBuilder<'a>) -> Self {
+        DeviceLoaderBuilder {
             loader_builder,
             queue_setup_fn: None,
             additional_suitability_fn: None,
             surface: None,
-            prioritised_device_types: SmallVec::new(),
-            queue_family_criteria: SmallVec::new(),
+            prioritised_device_types: BootstrapSmallVec::new(),
+            queue_family_criteria: BootstrapSmallVec::new(),
             preferred_device_memory_size: None,
             required_device_memory_size: None,
-            extensions: SmallVec::new(),
+            extensions: BootstrapSmallVec::new(),
             preferred_version: None,
             required_version: vk::API_VERSION_1_0,
             required_features: None,
@@ -691,14 +690,14 @@ impl<'a> DeviceBuilder<'a> {
         self
     }
 
-    /// Returns the [`erupt::DeviceLoader`] and [`DeviceMetadata`], containing
+    /// Returns the [`erupt::Device`] and [`DeviceMetadata`], containing
     /// the handle of the used physical device handle and its properties, as
     /// wells as the enabled device extensions and used queue setups.
     pub unsafe fn build(
         mut self,
-        instance: &'a InstanceLoader,
+        instance: &Instance,
         instance_metadata: &InstanceMetadata,
-    ) -> Result<(DeviceLoader, DeviceMetadata), DeviceCreationError> {
+    ) -> Result<(Device, DeviceMetadata), DeviceCreationError> {
         assert_eq!(instance.handle, instance_metadata.instance_handle());
 
         let mut queue_setup_fn = self.queue_setup_fn.unwrap_or_else(|| {
@@ -758,14 +757,14 @@ impl<'a> DeviceBuilder<'a> {
         struct Candidate {
             physical_device: vk::PhysicalDevice,
             properties: vk::PhysicalDeviceProperties,
-            queue_setups: SmallVec<QueueSetup>,
+            queue_setups: BootstrapSmallVec<QueueSetup>,
             memory_properties: vk::PhysicalDeviceMemoryProperties,
-            queue_family_properties: SmallVec<vk::QueueFamilyProperties>,
-            enabled_extensions: SmallVec<*const c_char>,
+            queue_family_properties: BootstrapSmallVec<vk::QueueFamilyProperties>,
+            enabled_extensions: BootstrapSmallVec<*const c_char>,
         }
 
-        let mut perfect_candidates = SmallVec::new();
-        let mut inperfect_candidates = SmallVec::new();
+        let mut perfect_candidates = BootstrapSmallVec::new();
+        let mut inperfect_candidates = BootstrapSmallVec::new();
         for (physical_device, properties) in devices {
             let mut perfect_candidate = true;
 
@@ -816,7 +815,7 @@ impl<'a> DeviceBuilder<'a> {
             }
 
             let queue_setup = if self.queue_family_criteria.is_empty() {
-                SmallVec::new()
+                BootstrapSmallVec::new()
             } else {
                 match queue_setup_fn(
                     physical_device,
@@ -829,7 +828,7 @@ impl<'a> DeviceBuilder<'a> {
             };
 
             let enabled_extensions = if self.extensions.is_empty() {
-                SmallVec::new()
+                BootstrapSmallVec::new()
             } else {
                 let mut extension_properties = instance
                     .enumerate_device_extension_properties(physical_device, None, None)
@@ -842,7 +841,7 @@ impl<'a> DeviceBuilder<'a> {
                     extension_properties.extend(extensions);
                 }
 
-                let mut enabled_extensions = SmallVec::new();
+                let mut enabled_extensions = BootstrapSmallVec::new();
                 for &(extension_name, required) in self.extensions.iter() {
                     let cstr = CStr::from_ptr(extension_name);
                     let present = extension_properties.iter().any(|supported_extension| {
@@ -887,12 +886,12 @@ impl<'a> DeviceBuilder<'a> {
 
         let features2_supported = instance_metadata.api_version_raw() >= vk::API_VERSION_1_1
             || instance_metadata
-                .is_extension_enabled(vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+                .is_extension_enabled(ash::extensions::khr::GetPhysicalDeviceProperties2::name() as *const _);
         for candidate in perfect_candidates
             .into_iter()
             .chain(inperfect_candidates.into_iter())
         {
-            let queue_create_infos: SmallVec<_> = candidate
+            let queue_create_infos: BootstrapSmallVec<_> = candidate
                 .queue_setups
                 .iter()
                 .map(QueueSetup::as_vulkan)

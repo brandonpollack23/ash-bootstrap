@@ -72,6 +72,8 @@ This project is licensed under the [zlib License].
 [`raw-window-handle`]: https://crates.io/crates/raw-window-handle
 */
 
+extern crate core;
+
 pub mod device;
 pub mod instance;
 pub mod swapchain;
@@ -79,3 +81,5 @@ pub mod swapchain;
 pub use device::*;
 pub use instance::*;
 pub use swapchain::*;
+
+type BootstrapSmallVec<T> = smallvec::SmallVec<[T; 8]>;
