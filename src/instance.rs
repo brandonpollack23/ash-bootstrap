@@ -604,9 +604,10 @@ impl<'a> InstanceBuilder<'a> {
             }
         });
 
-        let mut instance_messenger_info;
-        if let Some(messenger_info) = messenger_info {
-            instance_messenger_info = *messenger_info;
+        let mut instance_messenger_info: vk::DebugUtilsMessengerCreateInfoEXT;
+        let messenger_info = messenger_info.map(|x| x.build());
+        if let Some(mi) = messenger_info.clone() {
+            instance_messenger_info = mi;
             instance_info = instance_info.push_next(&mut instance_messenger_info);
         }
 

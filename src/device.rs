@@ -3,7 +3,6 @@ use crate::{BootstrapSmallVec, InstanceMetadata};
 use ash::extensions::khr::Surface;
 use ash::prelude::VkResult;
 use ash::{vk, Device, Instance, LoadingError};
-use std::ptr::null;
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -433,14 +432,12 @@ impl<'a> DeviceBuilder<'a> {
         self
     }
 
-    // TODO NOW delete or fix
-    // /// Build the device loader. Ensure `create_info` is the same as used in the
-    // /// creation of `device`.
+    /// Build the device loader. Ensure `create_info` is the same as used in the
+    /// creation of `device`.
     pub unsafe fn build_with_existing_device(
         self,
         instance_loader: &Instance,
         device: Device,
-        create_info: &vk::DeviceCreateInfo,
     ) -> VkResult<Device> {
         Ok(Device::load(instance_loader.fp_v1_0(), device.handle()))
     }
@@ -795,14 +792,9 @@ impl<'a> DeviceLoaderBuilder<'a> {
             let enabled_extensions = if self.extensions.is_empty() {
                 BootstrapSmallVec::new()
             } else {
-                let mut extension_properties =
+                let extension_properties =
                     instance.enumerate_device_extension_properties(physical_device)?;
-                for layer in instance_metadata.enabled_layers() {
-                    let cstr = layer.as_c_str();
-                    let extensions =
-                        instance.enumerate_device_extension_properties(physical_device)?;
-                    extension_properties.extend(extensions);
-                }
+                // TODO load with layer names to get all extension properties.
 
                 let mut enabled_extensions = BootstrapSmallVec::new();
                 for &(extension_name, required) in self.extensions.iter() {
@@ -883,11 +875,9 @@ impl<'a> DeviceLoaderBuilder<'a> {
             );
             match device_handle {
                 Ok(device_handle) => {
-                    let device = self.loader_builder.build_with_existing_device(
-                        instance,
-                        device_handle,
-                        &device_info,
-                    )?;
+                    let device = self
+                        .loader_builder
+                        .build_with_existing_device(instance, device_handle)?;
 
                     drop(queue_create_infos);
                     let device_metadata = DeviceMetadata {

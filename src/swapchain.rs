@@ -5,10 +5,9 @@
 //!
 //! [Ralith]: https://github.com/Ralith
 
-use crate::BootstrapSmallVec;
 use ash::extensions::khr::Surface;
 use ash::prelude::VkResult;
-use ash::{vk, Device, Instance};
+use ash::{vk, Device};
 use std::{collections::VecDeque, mem};
 
 /// Manages synchronizing and rebuilding a Vulkan swapchain.
@@ -143,7 +142,6 @@ impl Swapchain {
     /// `device` passed to [`Swapchain::new`].
     pub unsafe fn acquire(
         &mut self,
-        instance: &Instance,
         device: &Device,
         surface_loader: &Surface,
         timeout_ns: u64,
