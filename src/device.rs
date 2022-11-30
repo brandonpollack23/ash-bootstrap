@@ -1,5 +1,9 @@
 //! Device creation utils.
-use crate::{InstanceMetadata, BootstrapSmallVec};
+use crate::{BootstrapSmallVec, InstanceMetadata};
+use ash::extensions::khr::Surface;
+use ash::prelude::VkResult;
+use ash::{vk, Device, Instance, LoadingError};
+use std::ptr::null;
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -7,10 +11,6 @@ use std::{
     hash::{Hash, Hasher},
     os::raw::{c_char, c_float},
 };
-use std::ptr::null;
-use ash::prelude::VkResult;
-use ash::{Device, Instance, LoadingError, vk};
-use ash::extensions::khr::Surface;
 use thiserror::Error;
 
 /// Criteria for queue families.
@@ -134,8 +134,11 @@ impl QueueFamilyCriteria {
                     (None, _) => true,
                     (Some(_), None) => false,
                     (Some(expected), Some(surface)) => unsafe {
-                        let support = ash_surface
-                            .get_physical_device_surface_support(physical_device, i, surface)?;
+                        let support = ash_surface.get_physical_device_surface_support(
+                            physical_device,
+                            i,
+                            surface,
+                        )?;
 
                         support == expected
                     },
@@ -150,13 +153,13 @@ impl QueueFamilyCriteria {
         let best_candidate = candidates
             .into_iter()
             .max_by_key(|(_, queue_family_properties)| {
-                let positive_recommended = (self
-                    .should_support & queue_family_properties.queue_flags)
+                let positive_recommended = (self.should_support
+                    & queue_family_properties.queue_flags)
                     .as_raw()
                     .count_ones();
 
-                let negative_recommended = (self
-                    .should_not_support & (!queue_family_properties.queue_flags))
+                let negative_recommended = (self.should_not_support
+                    & (!queue_family_properties.queue_flags))
                     .as_raw()
                     .count_ones();
 
@@ -372,8 +375,7 @@ impl From<bool> for DeviceSuitability {
 
 /// Function used to specify a custom additional [`DeviceSuitability`]
 /// to consider in the selection process.
-pub type AdditionalSuitabilityFn =
-    dyn FnMut(&Instance, vk::PhysicalDevice) -> DeviceSuitability;
+pub type AdditionalSuitabilityFn = dyn FnMut(&Instance, vk::PhysicalDevice) -> DeviceSuitability;
 
 /// Builder for an device loader.
 pub struct DeviceBuilder<'a> {
@@ -384,12 +386,8 @@ pub struct DeviceBuilder<'a> {
             Option<&vk::AllocationCallbacks>,
         ) -> VkResult<Device>,
     >,
-    symbol_fn: Option<
-        &'a mut dyn FnMut(
-            vk::Device,
-            *const c_char,
-        ) -> Option<vk::PFN_vkVoidFunction>,
-    >,
+    symbol_fn:
+        Option<&'a mut dyn FnMut(vk::Device, *const c_char) -> Option<vk::PFN_vkVoidFunction>>,
     allocation_callbacks: Option<&'a vk::AllocationCallbacks>,
 }
 
@@ -423,10 +421,7 @@ impl<'a> DeviceBuilder<'a> {
     /// pointers, to use in place of the default.
     pub fn symbol_fn(
         mut self,
-        symbol: &'a mut impl FnMut(
-            vk::Device,
-            *const c_char,
-        ) -> Option<vk::PFN_vkVoidFunction>,
+        symbol: &'a mut impl FnMut(vk::Device, *const c_char) -> Option<vk::PFN_vkVoidFunction>,
     ) -> Self {
         self.symbol_fn = Some(symbol);
         self
@@ -462,11 +457,7 @@ impl<'a> DeviceBuilder<'a> {
             Some(create_device) => {
                 create_device(physical_device, create_info, self.allocation_callbacks)
             }
-            None => instance.create_device(
-                physical_device,
-                create_info,
-                self.allocation_callbacks,
-            ),
+            None => instance.create_device(physical_device, create_info, self.allocation_callbacks),
         }
     }
 }
@@ -804,12 +795,12 @@ impl<'a> DeviceLoaderBuilder<'a> {
             let enabled_extensions = if self.extensions.is_empty() {
                 BootstrapSmallVec::new()
             } else {
-                let mut extension_properties = instance
-                    .enumerate_device_extension_properties(physical_device)?;
+                let mut extension_properties =
+                    instance.enumerate_device_extension_properties(physical_device)?;
                 for layer in instance_metadata.enabled_layers() {
                     let cstr = layer.as_c_str();
-                    let extensions = instance
-                        .enumerate_device_extension_properties(physical_device)?;
+                    let extensions =
+                        instance.enumerate_device_extension_properties(physical_device)?;
                     extension_properties.extend(extensions);
                 }
 
@@ -857,8 +848,9 @@ impl<'a> DeviceLoaderBuilder<'a> {
         }
 
         let features2_supported = instance_metadata.api_version_raw() >= vk::API_VERSION_1_1
-            || instance_metadata
-                .is_extension_enabled(ash::extensions::khr::GetPhysicalDeviceProperties2::name().as_ptr());
+            || instance_metadata.is_extension_enabled(
+                ash::extensions::khr::GetPhysicalDeviceProperties2::name().as_ptr(),
+            );
         for candidate in perfect_candidates
             .into_iter()
             .chain(inperfect_candidates.into_iter())
@@ -884,12 +876,11 @@ impl<'a> DeviceLoaderBuilder<'a> {
                 }
             }
 
-            let device_handle = instance
-                .create_device(
-                    candidate.physical_device,
-                    &device_info,
-                    self.allocator.as_ref(),
-                );
+            let device_handle = instance.create_device(
+                candidate.physical_device,
+                &device_info,
+                self.allocator.as_ref(),
+            );
             match device_handle {
                 Ok(device_handle) => {
                     let device = self.loader_builder.build_with_existing_device(

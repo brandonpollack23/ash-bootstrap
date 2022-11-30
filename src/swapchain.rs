@@ -5,10 +5,11 @@
 //!
 //! [Ralith]: https://github.com/Ralith
 
-use std::{collections::VecDeque, mem};
-use ash::prelude::VkResult;
-use ash::{Device, Instance, vk};
 use crate::BootstrapSmallVec;
+use ash::extensions::khr::Surface;
+use ash::prelude::VkResult;
+use ash::{vk, Device, Instance};
+use std::{collections::VecDeque, mem};
 
 /// Manages synchronizing and rebuilding a Vulkan swapchain.
 pub struct Swapchain {
@@ -22,7 +23,7 @@ pub struct Swapchain {
     swapchain_ext: ash::extensions::khr::Swapchain,
     handle: vk::SwapchainKHR,
     generation: u64,
-    images: BootstrapSmallVec<vk::Image>,
+    images: Vec<vk::Image>,
     extent: vk::Extent2D,
     format: vk::SurfaceFormatKHR,
     needs_rebuild: bool,
@@ -66,7 +67,7 @@ impl Swapchain {
             swapchain_ext,
             handle: vk::SwapchainKHR::null(),
             generation: 0,
-            images: BootstrapSmallVec::new(),
+            images: Vec::new(),
             extent,
             format: vk::SurfaceFormatKHR::default(),
             needs_rebuild: true,
@@ -144,6 +145,7 @@ impl Swapchain {
         &mut self,
         instance: &Instance,
         device: &Device,
+        surface_loader: &Surface,
         timeout_ns: u64,
     ) -> VkResult<AcquiredFrame> {
         let frame_index = self.frame_index;
@@ -163,11 +165,14 @@ impl Swapchain {
 
         loop {
             if !self.needs_rebuild {
-                let acquire_next_image =
-                    self.swapchain_ext.acquire_next_image(self.handle, !0, acquire, vk::Fence::null());
-                let suboptimal = acquire_next_image.err().map(|e| e == vk::Result::SUBOPTIMAL_KHR).unwrap_or(false);
+                let acquire_next_image = self.swapchain_ext.acquire_next_image(
+                    self.handle,
+                    !0,
+                    acquire,
+                    vk::Fence::null(),
+                );
                 match acquire_next_image {
-                    Ok(index) => {
+                    Ok((index, suboptimal)) => {
                         self.needs_rebuild = suboptimal;
                         let invalidate_images =
                             self.frames[frame_index].generation != self.generation;
@@ -191,13 +196,13 @@ impl Swapchain {
             self.needs_rebuild = true;
 
             // Rebuild swapchain
-            let surface_capabilities = instance
-                .get_physical_device_surface_capabilities_khr(self.physical_device, self.surface)?;
+            let surface_capabilities = surface_loader
+                .get_physical_device_surface_capabilities(self.physical_device, self.surface)?;
 
             self.extent = match surface_capabilities.current_extent.width {
                 // If Vulkan doesn't know, the windowing system probably does. Known to apply at
                 // least to Wayland.
-                std::u32::MAX => vk::Extent2D {
+                u32::MAX => vk::Extent2D {
                     width: self.extent.width,
                     height: self.extent.height,
                 },
@@ -206,18 +211,15 @@ impl Swapchain {
 
             let pre_transform = if surface_capabilities
                 .supported_transforms
-                .contains(vk::SurfaceTransformFlagsKHR::IDENTITY_KHR)
+                .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
             {
                 vk::SurfaceTransformFlagsKHR::IDENTITY
             } else {
                 surface_capabilities.current_transform
             };
 
-            let present_modes = instance.get_physical_device_surface_present_modes_khr(
-                self.physical_device,
-                self.surface,
-                None
-            )?;
+            let present_modes = surface_loader
+                .get_physical_device_surface_present_modes(self.physical_device, self.surface)?;
             let present_mode = match present_modes
                 .iter()
                 .filter_map(|&mode| {
@@ -232,7 +234,7 @@ impl Swapchain {
                 .min_by_key(|&(_, priority)| priority)
             {
                 Some((mode, _)) => mode,
-                None => return VkResult::new_err(vk::Result::ERROR_OUT_OF_DATE_KHR),
+                None => return Err(vk::Result::ERROR_OUT_OF_DATE_KHR),
             };
 
             let desired_image_count =
@@ -245,11 +247,8 @@ impl Swapchain {
                 desired_image_count
             };
 
-            let surface_formats = instance.get_physical_device_surface_formats_khr(
-                self.physical_device,
-                self.surface,
-                None
-            )?;
+            let surface_formats = surface_loader
+                .get_physical_device_surface_formats(self.physical_device, self.surface)?;
             match surface_formats
                 .iter()
                 .filter_map(|&format| {
@@ -264,14 +263,14 @@ impl Swapchain {
                 .min_by_key(|&(_, priority)| priority)
             {
                 Some((format, _)) => self.format = format,
-                None => return VkResult::new_err(vk::Result::ERROR_OUT_OF_DATE_KHR),
+                None => return Err(vk::Result::ERROR_OUT_OF_DATE_KHR),
             };
 
             if self.handle != vk::SwapchainKHR::null() {
                 self.old_swapchains
                     .push_back((self.handle, self.generation));
             }
-            let handle = device.create_swapchain_khr(
+            let handle = self.swapchain_ext.create_swapchain(
                 &vk::SwapchainCreateInfoKHR::builder()
                     .surface(self.surface)
                     .min_image_count(image_count)
@@ -290,7 +289,7 @@ impl Swapchain {
             )?;
             self.generation = self.generation.wrapping_add(1);
             self.handle = handle;
-            self.images = device.get_swapchain_images_khr(handle, None)?;
+            self.images = self.swapchain_ext.get_swapchain_images(handle)?;
             self.needs_rebuild = false;
         }
     }
@@ -309,12 +308,11 @@ impl Swapchain {
     #[inline]
     pub unsafe fn queue_present(
         &mut self,
-        device: &Device,
         queue: vk::Queue,
         render_complete: vk::Semaphore,
         image_index: usize,
     ) -> VkResult<()> {
-        let queue_present = device.queue_present_khr(
+        let queue_present = self.swapchain_ext.queue_present(
             queue,
             &vk::PresentInfoKHR::builder()
                 .wait_semaphores(&[render_complete])
@@ -322,11 +320,13 @@ impl Swapchain {
                 .image_indices(&[image_index as u32]),
         );
 
-        if let vk::Result::SUBOPTIMAL_KHR | vk::Result::ERROR_OUT_OF_DATE_KHR = queue_present.raw {
+        if let Err(vk::Result::SUBOPTIMAL_KHR) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) =
+            queue_present
+        {
             self.needs_rebuild = true;
             Ok(())
         } else {
-            queue_present
+            queue_present.map(|_| ())
         }
     }
 }
@@ -399,17 +399,17 @@ impl Default for SwapchainOptions {
             format_preference: vec![
                 vk::SurfaceFormatKHR {
                     format: vk::Format::B8G8R8A8_SRGB,
-                    color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR_KHR,
+                    color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
                 },
                 vk::SurfaceFormatKHR {
                     format: vk::Format::R8G8B8A8_SRGB,
-                    color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR_KHR,
+                    color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
                 },
             ],
-            present_mode_preference: vec![vk::PresentModeKHR::FIFO_KHR],
+            present_mode_preference: vec![vk::PresentModeKHR::FIFO],
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
-            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE_KHR,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
         }
     }
 }

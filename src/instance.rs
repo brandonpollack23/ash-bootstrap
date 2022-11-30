@@ -1,16 +1,16 @@
 //! Instance creation utils.
+use crate::BootstrapSmallVec;
+use ash::extensions::ext::DebugUtils;
+use ash::prelude::VkResult;
+use ash::{vk, Entry, Instance, LoadingError};
+use cstr::cstr;
+use raw_window_handle::HasRawDisplayHandle;
 use std::{
     ffi::{c_void, CStr, CString, NulError},
     fmt,
     os::raw::c_char,
 };
-use ash::prelude::VkResult;
-use ash::{Entry, Instance, LoadingError, vk};
-use ash::extensions::ext::DebugUtils;
-use cstr::cstr;
-use raw_window_handle::HasRawDisplayHandle;
 use thiserror::Error;
-use crate::BootstrapSmallVec;
 
 /// Require, request or disable validation layers.
 #[derive(Debug, Copy, Clone)]
@@ -162,10 +162,7 @@ pub struct InstanceLoaderBuilder<'a> {
         ) -> VkResult<Instance>,
     >,
     symbol_fn: Option<
-        &'a mut dyn FnMut(
-            vk::Instance,
-            *const std::os::raw::c_char,
-        ) -> vk::PFN_vkVoidFunction,
+        &'a mut dyn FnMut(vk::Instance, *const std::os::raw::c_char) -> vk::PFN_vkVoidFunction,
     >,
     allocation_callbacks: Option<&'a vk::AllocationCallbacks>,
 }
@@ -199,10 +196,7 @@ impl<'a> InstanceLoaderBuilder<'a> {
     /// pointers, to use in place of the default.
     pub fn symbol_fn(
         mut self,
-        symbol: &'a mut impl FnMut(
-            vk::Instance,
-            *const std::os::raw::c_char,
-        ) -> vk::PFN_vkVoidFunction,
+        symbol: &'a mut impl FnMut(vk::Instance, *const std::os::raw::c_char) -> vk::PFN_vkVoidFunction,
     ) -> Self {
         self.symbol_fn = Some(symbol);
         self
@@ -487,7 +481,10 @@ impl<'a> InstanceBuilder<'a> {
         InstanceCreationError,
     > {
         let mut required_api_version = self.required_api_version;
-        let instance_version = entry.try_enumerate_instance_version().map_err(InstanceCreationError::VulkanError)?.unwrap();
+        let instance_version = entry
+            .try_enumerate_instance_version()
+            .map_err(InstanceCreationError::VulkanError)?
+            .unwrap();
         if let Some(requested_api_version) = self.requested_api_version {
             required_api_version =
                 required_api_version.max(requested_api_version.min(vk::make_api_version(
@@ -540,8 +537,7 @@ impl<'a> InstanceBuilder<'a> {
             return Err(InstanceCreationError::LayersNotPresent(layers_not_present));
         }
 
-        let mut extension_properties = entry
-            .enumerate_instance_extension_properties(None)?;
+        let mut extension_properties = entry.enumerate_instance_extension_properties(None)?;
         for &layer_name in &enabled_layers {
             extension_properties.extend({
                 let layer_name = CStr::from_ptr(layer_name);
