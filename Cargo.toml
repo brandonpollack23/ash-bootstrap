@@ -1,11 +1,11 @@
 [package]
-name = "erupt-bootstrap"
+name = "ash-bootstrap"
 version = "0.3.0"
-authors = ["Friz64 <friz64mc@protonmail.com>"]
+authors = ["Friz64 <friz64mc@protonmail.com>", "Brandon Pollack <brandonpollack23@gmail.com>"]
 license = "Zlib"
 description = "vk-bootstrap for Rust"
 documentation = "https://docs.rs/erupt-bootstrap"
-repository = "https://gitlab.com/Friz64/erupt-bootstrap"
+repository = "https://gitlab.com/brandonpollack23/ash-bootstrap"
 readme = "README.md"
 keywords = ["gamedev", "graphics", "vulkan"]
 categories = ["game-development", "graphics"]

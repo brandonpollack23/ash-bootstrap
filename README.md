@@ -1,5 +1,7 @@
 <img src="logo.svg" height=200>
 
+# TODO add documentation, rename to ash-bootstrap completely
+
 # erupt-bootstrap
 
 [![docs.rs](https://docs.rs/erupt-bootstrap/badge.svg)](https://docs.rs/erupt-bootstrap)
