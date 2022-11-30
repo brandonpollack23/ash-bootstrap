@@ -19,6 +19,7 @@ pub struct Swapchain {
 
     surface: vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
+    swapchain_ext: ash::extensions::khr::Swapchain,
     handle: vk::SwapchainKHR,
     generation: u64,
     images: BootstrapSmallVec<vk::Image>,
@@ -37,6 +38,7 @@ impl Swapchain {
         surface: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
         device: &Device,
+        swapchain_ext: ash::extensions::khr::Swapchain,
         extent: vk::Extent2D,
     ) -> Self {
         Self {
@@ -61,6 +63,7 @@ impl Swapchain {
 
             surface,
             physical_device,
+            swapchain_ext,
             handle: vk::SwapchainKHR::null(),
             generation: 0,
             images: BootstrapSmallVec::new(),
@@ -88,12 +91,10 @@ impl Swapchain {
             device.destroy_semaphore(frame.acquire, None);
         }
 
-        if self.handle != vk::SwapchainKHR::null() {
-            device.destroy_swapchain_khr(self.handle, None);
-        }
+        self.swapchain_ext.destroy_swapchain(self.handle, None);
 
         for &(swapchain, _) in &self.old_swapchains {
-            device.destroy_swapchain_khr(swapchain, None);
+            self.swapchain_ext.destroy_swapchain(swapchain, None);
         }
     }
 
@@ -156,16 +157,16 @@ impl Swapchain {
             if self.frames[next_frame_index].generation == generation {
                 break;
             }
-            device.destroy_swapchain_khr(swapchain, None);
+            self.swapchain_ext.destroy_swapchain(swapchain, None);
             self.old_swapchains.pop_front();
         }
 
         loop {
             if !self.needs_rebuild {
                 let acquire_next_image =
-                    device.acquire_next_image_khr(self.handle, !0, acquire, vk::Fence::null());
-                let suboptimal = acquire_next_image.raw == vk::Result::SUBOPTIMAL_KHR;
-                match acquire_next_image.result() {
+                    self.swapchain_ext.acquire_next_image(self.handle, !0, acquire, vk::Fence::null());
+                let suboptimal = acquire_next_image.err().map(|e| e == vk::Result::SUBOPTIMAL_KHR).unwrap_or(false);
+                match acquire_next_image {
                     Ok(index) => {
                         self.needs_rebuild = suboptimal;
                         let invalidate_images =
@@ -175,7 +176,7 @@ impl Swapchain {
                         device
                             .reset_fences(&[self.frames[frame_index].complete])
                             .unwrap();
-                        return VkResult::new_ok(AcquiredFrame {
+                        return Ok(AcquiredFrame {
                             image_index: index as usize,
                             frame_index,
                             ready: acquire,
@@ -184,7 +185,7 @@ impl Swapchain {
                         });
                     }
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {}
-                    Err(e) => return VkResult::new_err(e),
+                    Err(e) => return Err(e),
                 }
             };
             self.needs_rebuild = true;
