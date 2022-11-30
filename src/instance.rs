@@ -6,6 +6,7 @@ use std::{
 };
 use ash::prelude::VkResult;
 use ash::{Entry, Instance, LoadingError, vk};
+use ash::extensions::ext::DebugUtils;
 use cstr::cstr;
 use raw_window_handle::HasRawDisplayHandle;
 use thiserror::Error;
@@ -150,8 +151,10 @@ pub enum InstanceCreationError {
     #[error("loader creation error")]
     LoaderCreation(#[from] LoadingError),
 }
-/// Builder for an instance loader.
+
+/// Custom create instance funtion, symbol funciton, and allocation callbacks if you don't want to use [ash::Entry] defaults for some reason.
 pub struct InstanceLoaderBuilder<'a> {
+    /// Custom create instance fun if you don't want to use [ash::Entry] for some reason.
     create_instance_fn: Option<
         &'a mut dyn FnMut(
             &vk::InstanceCreateInfo,
@@ -212,44 +215,15 @@ impl<'a> InstanceLoaderBuilder<'a> {
     }
 
     /// Create an instance loader.
-    pub unsafe fn build<T>(
+    pub unsafe fn build(
         self,
         entry: &Entry,
         create_info: &vk::InstanceCreateInfo,
     ) -> VkResult<Instance> {
-        let instance = match self.create_instance_fn {
+        match self.create_instance_fn {
             Some(create_instance) => create_instance(create_info, self.allocation_callbacks),
             None => entry.create_instance(create_info, self.allocation_callbacks),
-        }?;
-
-        let mut version = vk::make_api_version(0, 1, 0, 0);
-        if !create_info.p_application_info.is_null() {
-            let user_version = (*create_info.p_application_info).api_version;
-            if user_version != 0 {
-                version = user_version;
-            }
         }
-
-        let enabled_extensions = std::slice::from_raw_parts(
-            create_info.pp_enabled_extension_names,
-            create_info.enabled_extension_count as _,
-        );
-        let enabled_extensions: Vec<_> = enabled_extensions
-            .iter()
-            .map(|&ptr| CStr::from_ptr(ptr))
-            .collect();
-
-        let mut default_symbol = move |name| entry.get_instance_proc_addr(instance.handle(), name);
-        let mut symbol: &mut dyn FnMut(
-            *const std::os::raw::c_char,
-        ) -> vk::PFN_vkVoidFunction = &mut default_symbol;
-        let mut user_symbol;
-        if let Some(internal_symbol) = self.symbol_fn {
-            user_symbol = move |name| internal_symbol(instance.handle(), name);
-            symbol = &mut user_symbol;
-        }
-
-        Ok(Instance::load(&vk::StaticFn::load(symbol), instance.handle()))
     }
 }
 
@@ -294,11 +268,11 @@ impl<'a> InstanceBuilder<'a> {
             layers: BootstrapSmallVec::new(),
             extensions: BootstrapSmallVec::new(),
             debug_messenger: DebugMessenger::Disable,
-            debug_message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::WARNING_EXT
-                | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR_EXT,
-            debug_message_type: vk::DebugUtilsMessageTypeFlagsEXT::GENERAL_EXT
-                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION_EXT
-                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE_EXT,
+            debug_message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
+            debug_message_type: vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
             enabled_validation_features: BootstrapSmallVec::new(),
             disabled_validation_features: BootstrapSmallVec::new(),
             allocator: None,
@@ -418,7 +392,7 @@ impl<'a> InstanceBuilder<'a> {
         let required_extensions =
             ash_window::enumerate_required_extensions(display_handle.raw_display_handle()).ok()?;
         self.extensions
-            .extend(required_extensions.into_iter().map(|name| (name, true)));
+            .extend(required_extensions.into_iter().map(|name| (*name, true)));
         Some(self)
     }
 
@@ -428,12 +402,12 @@ impl<'a> InstanceBuilder<'a> {
         match validation_layers {
             ValidationLayers::Require | ValidationLayers::Request => {
                 self.layers.push((
-                    cstr!("VK_LAYER_KHRONOS_validation"),
+                    cstr!("VK_LAYER_KHRONOS_validation").as_ptr(),
                     matches!(validation_layers, ValidationLayers::Require),
                 ));
 
                 self.extensions
-                    .push((vk::ExtValidationFeaturesFn::name(), false));
+                    .push((vk::ExtValidationFeaturesFn::name().as_ptr(), false));
             }
             ValidationLayers::Disable => (),
         }
@@ -447,7 +421,7 @@ impl<'a> InstanceBuilder<'a> {
     pub fn request_debug_messenger(mut self, debug_messenger: DebugMessenger) -> Self {
         if !matches!(debug_messenger, DebugMessenger::Disable) {
             self.extensions
-                .push((vk::ExtDebugUtilsFn::name(), false));
+                .push((vk::ExtDebugUtilsFn::name().as_ptr(), false));
         }
 
         self.debug_messenger = debug_messenger;
@@ -513,7 +487,7 @@ impl<'a> InstanceBuilder<'a> {
         InstanceCreationError,
     > {
         let mut required_api_version = self.required_api_version;
-        let instance_version = entry.try_enumerate_instance_version().ok()??;
+        let instance_version = entry.try_enumerate_instance_version().map_err(InstanceCreationError::VulkanError)?.unwrap();
         if let Some(requested_api_version) = self.requested_api_version {
             required_api_version =
                 required_api_version.max(requested_api_version.min(vk::make_api_version(
@@ -524,7 +498,7 @@ impl<'a> InstanceBuilder<'a> {
                 )));
         }
 
-        let mut app_info = vk::ApplicationInfoBuilder::new().api_version(required_api_version);
+        let mut app_info = vk::ApplicationInfo::builder().api_version(required_api_version);
 
         let app_name;
         if let Some(val) = self.app_name {
@@ -546,7 +520,7 @@ impl<'a> InstanceBuilder<'a> {
             app_info = app_info.engine_version(engine_version);
         }
 
-        let layer_properties = entry.enumerate_instance_layer_properties().result()?;
+        let layer_properties = entry.enumerate_instance_layer_properties()?;
         let mut enabled_layers = BootstrapSmallVec::new();
         let mut layers_not_present = BootstrapSmallVec::new();
         for (layer_name, required) in self.layers {
@@ -567,14 +541,12 @@ impl<'a> InstanceBuilder<'a> {
         }
 
         let mut extension_properties = entry
-            .enumerate_instance_extension_properties(None)
-            .result()?;
+            .enumerate_instance_extension_properties(None)?;
         for &layer_name in &enabled_layers {
             extension_properties.extend({
                 let layer_name = CStr::from_ptr(layer_name);
                 entry
-                    .enumerate_instance_extension_properties(Some(layer_name))
-                    .result()?
+                    .enumerate_instance_extension_properties(Some(layer_name))?
                     .into_iter()
             });
         }
@@ -608,7 +580,7 @@ impl<'a> InstanceBuilder<'a> {
             ));
         }
 
-        let mut instance_info = vk::InstanceCreateInfoBuilder::new()
+        let mut instance_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
             .enabled_layer_names(&enabled_layers)
             .enabled_extension_names(&enabled_extensions);
@@ -619,7 +591,7 @@ impl<'a> InstanceBuilder<'a> {
         );
 
         let messenger_info = should_create_debug_messenger.then(|| {
-            let messenger_info = vk::DebugUtilsMessengerCreateInfoEXTBuilder::new()
+            let messenger_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                 .message_severity(self.debug_message_severity)
                 .message_type(self.debug_message_type);
             match self.debug_messenger {
@@ -630,7 +602,7 @@ impl<'a> InstanceBuilder<'a> {
                     callback,
                     user_data_pointer,
                 } => messenger_info
-                    .pfn_user_callback(Some(callback))
+                    .pfn_user_callback(callback)
                     .user_data(user_data_pointer),
                 DebugMessenger::Disable => unreachable!(),
             }
@@ -639,27 +611,26 @@ impl<'a> InstanceBuilder<'a> {
         let mut instance_messenger_info;
         if let Some(messenger_info) = messenger_info {
             instance_messenger_info = *messenger_info;
-            instance_info = instance_info.extend_from(&mut instance_messenger_info);
+            instance_info = instance_info.push_next(&mut instance_messenger_info);
         }
 
         let mut validation_features;
         if is_validation_features_enabled {
-            validation_features = vk::ValidationFeaturesEXTBuilder::new()
+            validation_features = vk::ValidationFeaturesEXT::builder()
                 .enabled_validation_features(&self.enabled_validation_features)
                 .disabled_validation_features(&self.disabled_validation_features);
-            instance_info = instance_info.extend_from(&mut validation_features);
+            instance_info = instance_info.push_next(&mut validation_features);
         }
 
         let instance = self.loader_builder.build(entry, &instance_info)?;
         let debug_utils_messenger = messenger_info
             .map(|messenger_info| unsafe {
-                instance
-                    .create_debug_utils_messenger_ext(&messenger_info, self.allocator.as_ref())
-                    .result()
+                let debug_utils = DebugUtils::new(entry, &instance);
+                debug_utils.create_debug_utils_messenger(&messenger_info, self.allocator.as_ref())
             })
             .transpose()?;
         let instance_metadata = InstanceMetadata {
-            instance_handle: instance.handle,
+            instance_handle: instance.handle(),
             api_version: app_info.api_version,
             enabled_layers: enabled_layers
                 .into_iter()

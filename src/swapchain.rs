@@ -45,7 +45,7 @@ impl Swapchain {
                     Frame {
                         complete: device
                             .create_fence(
-                                &vk::FenceCreateInfoBuilder::new()
+                                &vk::FenceCreateInfo::builder()
                                     .flags(vk::FenceCreateFlags::SIGNALED),
                                 None,
                             )
@@ -271,7 +271,7 @@ impl Swapchain {
                     .push_back((self.handle, self.generation));
             }
             let handle = device.create_swapchain_khr(
-                &vk::SwapchainCreateInfoKHRBuilder::new()
+                &vk::SwapchainCreateInfoKHR::builder()
                     .surface(self.surface)
                     .min_image_count(image_count)
                     .image_color_space(self.format.color_space)
@@ -315,7 +315,7 @@ impl Swapchain {
     ) -> VkResult<()> {
         let queue_present = device.queue_present_khr(
             queue,
-            &vk::PresentInfoKHRBuilder::new()
+            &vk::PresentInfoKHR::builder()
                 .wait_semaphores(&[render_complete])
                 .swapchains(&[self.handle])
                 .image_indices(&[image_index as u32]),
