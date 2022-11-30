@@ -290,13 +290,13 @@ impl DeviceMetadata {
     #[inline]
     pub fn device_queue(
         &self,
-        ash_surface: &Surface,
+        surface_loader: &Surface,
         device: &Device,
         criteria: QueueFamilyCriteria,
         queue_index: u32,
     ) -> Result<Option<(vk::Queue, u32)>, vk::Result> {
         let queue_family = criteria.choose_queue_family(
-            ash_surface,
+            surface_loader,
             self.physical_device,
             &self.queue_family_properties,
             self.surface,
@@ -657,7 +657,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
     pub unsafe fn build(
         mut self,
         instance: &Instance,
-        ash_surface: &Surface,
+        surface_loader: &Surface,
         instance_metadata: &InstanceMetadata,
     ) -> Result<(Device, DeviceMetadata), DeviceCreationError> {
         assert_eq!(instance.handle(), instance_metadata.instance_handle());
@@ -670,7 +670,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
                     let mut queue_setup = HashSet::with_capacity(queue_family_criteria.len());
                     for queue_family_criteria in queue_family_criteria {
                         match queue_family_criteria.choose_queue_family(
-                            ash_surface,
+                            surface_loader,
                             physical_device,
                             queue_family_properties,
                             self.surface,
