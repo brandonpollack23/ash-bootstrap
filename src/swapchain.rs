@@ -38,7 +38,7 @@ impl Swapchain {
         surface: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
         device: &Device,
-        swapchain_ext: ash::extensions::khr::Swapchain,
+        swapchain_loader: ash::extensions::khr::Swapchain,
         extent: vk::Extent2D,
     ) -> Self {
         Self {
@@ -63,7 +63,7 @@ impl Swapchain {
 
             surface,
             physical_device,
-            swapchain_ext,
+            swapchain_ext: swapchain_loader,
             handle: vk::SwapchainKHR::null(),
             generation: 0,
             images: Vec::new(),
