@@ -1,9 +1,12 @@
-use erupt::{vk, EntryLoader};
-use erupt_bootstrap::{
+use ash::extensions::khr::Surface;
+use ash::{vk, Entry};
+use ash_bootstrap::{
     DebugMessenger, DeviceBuilder, InstanceBuilder, QueueFamilyCriteria, ValidationLayers,
 };
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use winit::event::Event;
 use winit::{
-    event::{Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
+    event::{KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
@@ -11,27 +14,36 @@ use winit::{
 fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
-        .with_title("erupt-bootstrap")
+        .with_title("ash-bootstrap")
         .build(&event_loop)
         .unwrap();
 
-    let entry = EntryLoader::new().unwrap();
+    let entry = unsafe { Entry::load() }.unwrap();
     let instance_builder = InstanceBuilder::new()
         .validation_layers(ValidationLayers::Request)
         .request_debug_messenger(DebugMessenger::Default)
         .require_surface_extensions(&window)
         .unwrap();
-    let (instance, debug_messenger, instance_metadata) =
+    let (instance, (debug_loader, debug_messenger), instance_metadata) =
         unsafe { instance_builder.build(&entry) }.unwrap();
 
-    let surface =
-        unsafe { erupt::utils::surface::create_surface(&instance, &window, None) }.unwrap();
+    let surface_loader = unsafe { Surface::new(&entry, &instance) };
+    let surface = unsafe {
+        ash_window::create_surface(
+            &entry,
+            &instance,
+            window.raw_display_handle(),
+            window.raw_window_handle(),
+            None,
+        )
+        .expect("Cannot create surface")
+    };
 
     let graphics_present = QueueFamilyCriteria::graphics_present();
     let transfer = QueueFamilyCriteria::preferably_separate_transfer();
 
-    let device_features = vk::PhysicalDeviceFeatures2Builder::new()
-        .features(vk::PhysicalDeviceFeaturesBuilder::new().build());
+    let device_features = vk::PhysicalDeviceFeatures2::builder()
+        .features(vk::PhysicalDeviceFeatures::builder().build());
 
     let device_builder = DeviceBuilder::new()
         .queue_family(graphics_present)
@@ -39,13 +51,13 @@ fn main() {
         .require_features(&device_features)
         .for_surface(surface);
     let (device, device_metadata) =
-        unsafe { device_builder.build(&instance, &instance_metadata) }.unwrap();
+        unsafe { device_builder.build(&instance, &surface_loader, &instance_metadata) }.unwrap();
     let graphics_present = device_metadata
-        .device_queue(&instance, &device, graphics_present, 0)
+        .device_queue(&surface_loader, &device, graphics_present, 0)
         .unwrap()
         .unwrap();
     let transfer = device_metadata
-        .device_queue(&instance, &device, transfer, 0)
+        .device_queue(&surface_loader, &device, transfer, 0)
         .unwrap()
         .unwrap();
 
@@ -72,10 +84,10 @@ fn main() {
             unsafe {
                 device.destroy_device(None);
 
-                instance.destroy_surface_khr(surface, None);
+                surface_loader.destroy_surface(surface, None);
 
                 if let Some(debug_messenger) = debug_messenger {
-                    instance.destroy_debug_utils_messenger_ext(debug_messenger, None);
+                    debug_loader.destroy_debug_utils_messenger(debug_messenger, None);
                 }
 
                 instance.destroy_instance(None);

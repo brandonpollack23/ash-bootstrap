@@ -1,14 +1,13 @@
-#![doc(html_logo_url = "https://gitlab.com/Friz64/erupt-bootstrap/-/raw/main/logo.svg")]
 #![allow(clippy::missing_safety_doc)]
 #![warn(missing_docs)]
 /*!
-Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
+Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`] and forked from erupt-bootstrap.
 
 - ✅ Instance creation
 - ✅ Physical Device selection
 - ✅ Device creation
 - ✅ Getting queues
-- ✅ Swapchain handling ([courtesy of Ralith](https://github.com/MaikKlein/ash/pull/506) - thanks!)
+- ✅ Swapchain handling was handled in erupt-bootstrap, but ash_window takes care of creation, we handle swapchain creation/recreation in this lib.
 
 ## Cargo Features
 

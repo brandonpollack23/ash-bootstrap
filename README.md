@@ -1,8 +1,4 @@
-<img src="logo.svg" height=200>
-
-# TODO add documentation, rename to ash-bootstrap completely
-
-# erupt-bootstrap
+# ash-bootstrap
 
 [![docs.rs](https://docs.rs/erupt-bootstrap/badge.svg)](https://docs.rs/erupt-bootstrap)
 [![crates.io](https://img.shields.io/crates/v/erupt-bootstrap.svg)](https://crates.io/crates/erupt-bootstrap)
@@ -13,7 +9,7 @@ Vulkan Bootstrapping library for Rust, inspired by [`vk-bootstrap`].
 - ✅ Physical Device selection
 - ✅ Device creation
 - ✅ Getting queues
-- ✅ Swapchain handling ([courtesy of Ralith](https://github.com/MaikKlein/ash/pull/506) - thanks!)
+- ✅ Swapchain handling was handled in erupt-bootstrap, but ash_window takes care of creation, we handle swapchain creation/recreation in this lib.
 
 ## Cargo Features
 

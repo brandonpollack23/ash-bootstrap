@@ -1,9 +1,11 @@
 // Courtesy of Ralith
 
-use erupt::{vk, DeviceLoader, EntryLoader, InstanceLoader};
-use erupt_bootstrap::{
-    DeviceBuilder, InstanceBuilder, QueueFamilyCriteria, Swapchain, SwapchainOptions,
+use ash::extensions::khr::{Surface, Swapchain};
+use ash::{vk, Device, Entry, Instance};
+use ash_bootstrap::{
+    DeviceBuilder, DeviceMetadata, InstanceBuilder, QueueFamilyCriteria, SwapchainOptions,
 };
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use std::time::Instant;
 use winit::{
     event::{Event, WindowEvent},
@@ -41,14 +43,41 @@ fn main() {
     });
 }
 
+fn setup_swapchain(
+    width: u32,
+    height: u32,
+    surface: vk::SurfaceKHR,
+    device: &Device,
+    swapchain_loader: Swapchain,
+    device_metadata: &DeviceMetadata,
+) -> (ash_bootstrap::Swapchain, usize) {
+    let mut swapchain_options = SwapchainOptions::new();
+    swapchain_options
+        .present_mode_preference(&[vk::PresentModeKHR::MAILBOX, vk::PresentModeKHR::FIFO])
+        .frames_in_flight(2);
+
+    let swapchain_extent = vk::Extent2D { width, height };
+    let swapchain = ash_bootstrap::Swapchain::new(
+        swapchain_options,
+        surface,
+        device_metadata.physical_device(),
+        device,
+        swapchain_loader,
+        swapchain_extent,
+    );
+    let frames_in_flight = swapchain.frames_in_flight();
+    (swapchain, frames_in_flight)
+}
+
 pub struct App {
-    device: DeviceLoader,
-    instance: InstanceLoader,
-    _entry: EntryLoader,
+    surface_loader: Surface,
+    device: Device,
+    instance: Instance,
+    _entry: Entry,
     surface: vk::SurfaceKHR,
     epoch: Instant,
 
-    swapchain: Swapchain,
+    swapchain: ash_bootstrap::Swapchain,
     queue: vk::Queue,
 
     command_pool: vk::CommandPool,
@@ -58,45 +87,54 @@ pub struct App {
 impl App {
     pub fn new(window: &Window) -> Self {
         unsafe {
-            let entry = EntryLoader::new().unwrap();
+            let entry = unsafe { Entry::load() }.unwrap();
             let instance_builder = InstanceBuilder::new()
                 .require_surface_extensions(&window)
                 .unwrap();
             let (instance, _debug_messenger, instance_metadata) =
                 instance_builder.build(&entry).unwrap();
 
-            let surface = erupt::utils::surface::create_surface(&instance, &window, None).unwrap();
+            let surface_loader = unsafe { Surface::new(&entry, &instance) };
+            let surface = unsafe {
+                ash_window::create_surface(
+                    &entry,
+                    &instance,
+                    window.raw_display_handle(),
+                    window.raw_window_handle(),
+                    None,
+                )
+                .expect("Cannot create surface")
+            };
 
             let graphics_present = QueueFamilyCriteria::graphics_present();
 
             let device_builder = DeviceBuilder::new()
-                .require_extension(vk::KHR_SWAPCHAIN_EXTENSION_NAME)
+                .require_extension(Swapchain::name().as_ptr())
                 .queue_family(graphics_present)
                 .for_surface(surface);
-            let (device, device_metadata) =
-                device_builder.build(&instance, &instance_metadata).unwrap();
+            let (device, device_metadata) = device_builder
+                .build(&instance, &surface_loader, &instance_metadata)
+                .unwrap();
             let (graphics_present, graphics_present_idx) = device_metadata
-                .device_queue(&instance, &device, graphics_present, 0)
+                .device_queue(&surface_loader, &device, graphics_present, 0)
                 .unwrap()
                 .unwrap();
 
             let size = window.inner_size();
             let mut options = SwapchainOptions::default();
             options.usage(vk::ImageUsageFlags::TRANSFER_DST); // Typically this would be left as the default, COLOR_ATTACHMENT
-            let swapchain = Swapchain::new(
-                options,
+            let (swapchain, frames_in_flight) = setup_swapchain(
+                size.width,
+                size.height,
                 surface,
-                device_metadata.physical_device(),
                 &device,
-                vk::Extent2D {
-                    width: size.width,
-                    height: size.height,
-                },
+                Swapchain::new(&instance, &device),
+                &device_metadata,
             );
 
             let command_pool = device
                 .create_command_pool(
-                    &vk::CommandPoolCreateInfoBuilder::new()
+                    &vk::CommandPoolCreateInfo::builder()
                         .flags(
                             vk::CommandPoolCreateFlags::TRANSIENT
                                 | vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
@@ -107,7 +145,7 @@ impl App {
                 .unwrap();
             let cmds = device
                 .allocate_command_buffers(
-                    &vk::CommandBufferAllocateInfoBuilder::new()
+                    &vk::CommandBufferAllocateInfo::builder()
                         .command_pool(command_pool)
                         .level(vk::CommandBufferLevel::PRIMARY)
                         .command_buffer_count(swapchain.frames_in_flight() as u32),
@@ -126,6 +164,7 @@ impl App {
             Self {
                 _entry: entry,
                 instance,
+                surface_loader,
                 surface,
                 epoch: Instant::now(),
 
@@ -147,14 +186,14 @@ impl App {
         unsafe {
             let acq = self
                 .swapchain
-                .acquire(&self.instance, &self.device, !0)
+                .acquire(&self.device, &self.surface_loader, !0)
                 .unwrap();
             let cmd = self.frames[acq.frame_index].cmd;
             let swapchain_image = self.swapchain.images()[acq.image_index];
             self.device
                 .begin_command_buffer(
                     cmd,
-                    &vk::CommandBufferBeginInfoBuilder::new()
+                    &vk::CommandBufferBeginInfo::builder()
                         .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
                 )
                 .unwrap();
@@ -175,7 +214,7 @@ impl App {
                 vk::DependencyFlags::default(),
                 &[],
                 &[],
-                &[vk::ImageMemoryBarrierBuilder::new()
+                &[vk::ImageMemoryBarrier::builder()
                     .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                     .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
@@ -188,7 +227,8 @@ impl App {
                         level_count: 1,
                         base_array_layer: 0,
                         layer_count: 1,
-                    })],
+                    })
+                    .build()],
             );
             let t = (self.epoch.elapsed().as_secs_f32().sin() + 1.0) * 0.5;
             self.device.cmd_clear_color_image(
@@ -198,12 +238,13 @@ impl App {
                 &vk::ClearColorValue {
                     float32: [0.0, t, 0.0, 1.0],
                 },
-                &[vk::ImageSubresourceRangeBuilder::new()
+                &[vk::ImageSubresourceRange::builder()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(1)],
+                    .layer_count(1)
+                    .build()],
             );
             // Typically this barrier would be implemented with the implicit subpass dependency to
             // EXTERNAL
@@ -214,7 +255,7 @@ impl App {
                 vk::DependencyFlags::default(),
                 &[],
                 &[],
-                &[vk::ImageMemoryBarrierBuilder::new()
+                &[vk::ImageMemoryBarrier::builder()
                     .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                     .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
@@ -227,7 +268,8 @@ impl App {
                         level_count: 1,
                         base_array_layer: 0,
                         layer_count: 1,
-                    })],
+                    })
+                    .build()],
             );
 
             //
@@ -238,17 +280,17 @@ impl App {
             self.device
                 .queue_submit(
                     self.queue,
-                    &[vk::SubmitInfoBuilder::new()
+                    &[vk::SubmitInfo::builder()
                         .wait_semaphores(&[acq.ready])
                         .wait_dst_stage_mask(&[vk::PipelineStageFlags::TRANSFER])
                         .signal_semaphores(&[self.frames[acq.frame_index].complete])
-                        .command_buffers(&[cmd])],
+                        .command_buffers(&[cmd])
+                        .build()],
                     acq.complete,
                 )
                 .unwrap();
             self.swapchain
                 .queue_present(
-                    &self.device,
                     self.queue,
                     self.frames[acq.frame_index].complete,
                     acq.image_index,
@@ -267,7 +309,7 @@ impl Drop for App {
             }
             self.device.destroy_command_pool(self.command_pool, None);
             self.swapchain.destroy(&self.device);
-            self.instance.destroy_surface_khr(self.surface, None);
+            self.surface_loader.destroy_surface(self.surface, None);
             self.device.destroy_device(None);
             self.instance.destroy_instance(None);
         }
