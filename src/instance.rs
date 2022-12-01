@@ -469,13 +469,14 @@ impl<'a> InstanceBuilder<'a> {
     /// Returns the [`erupt::InstanceLoader`], an debug messenger if it was
     /// requested and successfully created, and [`InstanceMetadata`] about what
     /// is actually enabled in the instance.
-    pub unsafe fn build<T>(
+    pub unsafe fn build(
         self,
         entry: &Entry,
     ) -> Result<
         (
             Instance,
-            Option<vk::DebugUtilsMessengerEXT>,
+            // TODO NOW make a type for this.
+            (DebugUtils, Option<vk::DebugUtilsMessengerEXT>),
             InstanceMetadata,
         ),
         InstanceCreationError,
@@ -620,9 +621,9 @@ impl<'a> InstanceBuilder<'a> {
         }
 
         let instance = self.loader_builder.build(entry, &instance_info)?;
+        let debug_utils = DebugUtils::new(entry, &instance);
         let debug_utils_messenger = messenger_info
             .map(|messenger_info| unsafe {
-                let debug_utils = DebugUtils::new(entry, &instance);
                 debug_utils.create_debug_utils_messenger(&messenger_info, self.allocator.as_ref())
             })
             .transpose()?;
@@ -639,7 +640,11 @@ impl<'a> InstanceBuilder<'a> {
                 .collect(),
         };
 
-        Ok((instance, debug_utils_messenger, instance_metadata))
+        Ok((
+            instance,
+            (debug_utils, debug_utils_messenger),
+            instance_metadata,
+        ))
     }
 }
 
