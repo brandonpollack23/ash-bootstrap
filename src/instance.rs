@@ -386,7 +386,7 @@ impl<'a> InstanceBuilder<'a> {
         let required_extensions =
             ash_window::enumerate_required_extensions(display_handle.raw_display_handle()).ok()?;
         self.extensions
-            .extend(required_extensions.into_iter().map(|name| (*name, true)));
+            .extend(required_extensions.iter().map(|name| (*name, true)));
         Some(self)
     }
 
@@ -607,7 +607,7 @@ impl<'a> InstanceBuilder<'a> {
 
         let mut instance_messenger_info: vk::DebugUtilsMessengerCreateInfoEXT;
         let messenger_info = messenger_info.map(|x| x.build());
-        if let Some(mi) = messenger_info.clone() {
+        if let Some(mi) = messenger_info {
             instance_messenger_info = mi;
             instance_info = instance_info.push_next(&mut instance_messenger_info);
         }

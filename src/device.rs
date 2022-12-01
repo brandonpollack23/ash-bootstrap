@@ -304,7 +304,7 @@ impl DeviceMetadata {
 
         Ok(queue_family.and_then(|(idx, _properties)| unsafe {
             let handle = device.get_device_queue(idx, queue_index);
-            (handle != vk::Queue::null()).then(|| (handle, idx))
+            (handle != vk::Queue::null()).then_some((handle, idx))
         }))
     }
 
