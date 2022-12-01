@@ -377,7 +377,7 @@ impl From<bool> for DeviceSuitability {
 pub type AdditionalSuitabilityFn = dyn FnMut(&Instance, vk::PhysicalDevice) -> DeviceSuitability;
 
 /// Builder for an device loader.
-pub struct DeviceBuilder<'a> {
+pub struct DeviceLoaderBuilder<'a> {
     create_device_fn: Option<
         &'a mut dyn FnMut(
             vk::PhysicalDevice,
@@ -390,10 +390,10 @@ pub struct DeviceBuilder<'a> {
     allocation_callbacks: Option<&'a vk::AllocationCallbacks>,
 }
 
-impl<'a> DeviceBuilder<'a> {
+impl<'a> DeviceLoaderBuilder<'a> {
     /// Create a new instance loader builder.
     pub fn new() -> Self {
-        DeviceBuilder {
+        DeviceLoaderBuilder {
             create_device_fn: None,
             symbol_fn: None,
             allocation_callbacks: None,
@@ -460,8 +460,8 @@ impl<'a> DeviceBuilder<'a> {
 }
 
 /// Allows to easily create an [`erupt::Device`] and queues.
-pub struct DeviceLoaderBuilder<'a> {
-    loader_builder: DeviceBuilder<'a>,
+pub struct DeviceBuilder<'a> {
+    loader_builder: DeviceLoaderBuilder<'a>,
     queue_setup_fn: Option<Box<CustomQueueSetupFn>>,
     additional_suitability_fn: Option<Box<AdditionalSuitabilityFn>>,
     surface: Option<vk::SurfaceKHR>,
@@ -477,16 +477,16 @@ pub struct DeviceLoaderBuilder<'a> {
     allocator: Option<vk::AllocationCallbacks>,
 }
 
-impl<'a> DeviceLoaderBuilder<'a> {
+impl<'a> DeviceBuilder<'a> {
     /// Create a new device builder.
     #[inline]
     pub fn new() -> Self {
-        DeviceLoaderBuilder::with_loader_builder(DeviceBuilder::new())
+        DeviceBuilder::with_loader_builder(DeviceLoaderBuilder::new())
     }
 
     /// Create a new device builder with a custom [`DeviceBuilder`].
-    pub fn with_loader_builder(loader_builder: DeviceBuilder<'a>) -> Self {
-        DeviceLoaderBuilder {
+    pub fn with_loader_builder(loader_builder: DeviceLoaderBuilder<'a>) -> Self {
+        DeviceBuilder {
             loader_builder,
             queue_setup_fn: None,
             additional_suitability_fn: None,
@@ -906,7 +906,7 @@ impl<'a> DeviceLoaderBuilder<'a> {
     }
 }
 
-impl<'a> Default for DeviceBuilder<'a> {
+impl<'a> Default for DeviceLoaderBuilder<'a> {
     fn default() -> Self {
         Self::new()
     }
