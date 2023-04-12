@@ -48,10 +48,8 @@ pub unsafe extern "system" fn default_debug_callback(
   _p_user_data: *mut c_void,
 ) -> vk::Bool32 {
   let message_severity = format!("{:?}", message_severity);
-  let message_severity = message_severity.strip_suffix("_EXT").unwrap();
 
   let message_type = format!("{:?}", message_type);
-  let message_type = message_type.strip_suffix("_EXT").unwrap();
 
   let message = CStr::from_ptr((*p_callback_data).p_message).to_string_lossy();
   // \x1b[1m{string}\x1b[0m - bold text.
